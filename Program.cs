@@ -932,7 +932,7 @@ Vector2 saber2TargetPosition = saber2Position;
             Color innerColor = isBlue
                 ? new Color((byte)90, (byte)175, (byte)255, innerAlpha)
                 : new Color((byte)255, (byte)75, (byte)95, innerAlpha);
-            Color trailCore = new Color((byte)245, (byte)250, (byte)255, (byte)Math.Clamp((int)(strength * 155f), 0, 155));
+            Color trailCore = new Color((byte)255, (byte)255, (byte)255, (byte)Math.Clamp((int)(strength * 185f), 0, 185));
 
             Raylib.DrawCylinderEx(previous.Position, current.Position, radius * 1.8f, radius * 1.8f, 6, outerColor);
             Raylib.DrawCylinderEx(previous.Position, current.Position, radius, radius, 6, innerColor);
@@ -959,14 +959,12 @@ Vector2 saber2TargetPosition = saber2Position;
         Vector3 gripStart = position - direction * 0.58f;
         Vector3 gripEnd = position - direction * 0.1f;
         Color outerColor = color == Color.Blue
-            ? new Color((byte)20, (byte)(105 + intensity * 90), (byte)255, (byte)(55 + intensity * 55))
-            : new Color((byte)255, (byte)(25 + intensity * 85), (byte)(45 + intensity * 45), (byte)(55 + intensity * 55));
+            ? new Color((byte)20, (byte)(105 + intensity * 90), (byte)255, (byte)(45 + intensity * 35))
+            : new Color((byte)255, (byte)(25 + intensity * 85), (byte)(45 + intensity * 45), (byte)(45 + intensity * 35));
         Color shellColor = color == Color.Blue
-            ? new Color((byte)45, (byte)165, (byte)255, (byte)(205 + intensity * 35))
-            : new Color((byte)255, (byte)55, (byte)75, (byte)(205 + intensity * 35));
-        Color coreColor = color == Color.Blue
-            ? new Color((byte)225, (byte)248, (byte)255, (byte)255)
-            : new Color((byte)255, (byte)232, (byte)235, (byte)255);
+            ? new Color((byte)35, (byte)150, (byte)255, (byte)(75 + intensity * 25))
+            : new Color((byte)255, (byte)45, (byte)65, (byte)(75 + intensity * 25));
+        Color coreColor = Color.White;
 
         // Compact metallic hilt, rings, grip, emitter, and pommel all share the existing pivot.
         Raylib.DrawCylinderEx(gripStart, gripEnd, 0.105f, 0.105f, 10, new Color((byte)38, (byte)42, (byte)48, (byte)255));
@@ -979,13 +977,14 @@ Vector2 saber2TargetPosition = saber2Position;
         Raylib.DrawCylinderEx(position - direction * 0.03f, position + direction * 0.12f, 0.21f + intensity * 0.025f, 0.21f + intensity * 0.025f, 10, outerColor);
 
         // Tight aura around a dominant white-hot blade core.
-        Raylib.DrawCylinderEx(start, end, 0.12f + intensity * 0.018f, 0.12f + intensity * 0.018f, 12, outerColor);
-        Raylib.DrawCylinderEx(start, end, 0.082f + intensity * 0.008f, 0.082f + intensity * 0.008f, 12, shellColor);
-        Raylib.DrawCylinderEx(start, end, 0.062f, 0.062f, 10, coreColor);
-        Raylib.DrawCylinderEx(start, end, 0.034f, 0.034f, 8, Color.White);
-        Raylib.DrawSphere(end, 0.085f + intensity * 0.012f, outerColor);
-        Raylib.DrawSphere(end, 0.06f, Color.White);
-        Raylib.DrawSphere(collarEnd, 0.085f + intensity * 0.012f, coreColor);
+        Raylib.DrawCylinderEx(start, end, 0.115f + intensity * 0.015f, 0.115f + intensity * 0.015f, 12, outerColor);
+        Raylib.DrawCylinderEx(start, end, 0.088f + intensity * 0.006f, 0.088f + intensity * 0.006f, 12, shellColor);
+        Raylib.DrawCylinderEx(start, end, 0.073f, 0.073f, 10, Color.White);
+        Raylib.DrawCylinderEx(start, end, 0.045f, 0.045f, 8, Color.White);
+        Raylib.DrawSphere(end, 0.082f + intensity * 0.01f, outerColor);
+        Raylib.DrawSphere(end, 0.065f, Color.White);
+        Raylib.DrawSphere(collarEnd, 0.075f + intensity * 0.01f, outerColor);
+        Raylib.DrawSphere(collarEnd, 0.052f, Color.White);
         Raylib.DrawLine3D(start, end, shellColor);
         Raylib.DrawLine3D(start, end, Color.White);
         Raylib.DrawSphere(start, 0.07f, Color.White);
