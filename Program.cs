@@ -345,7 +345,10 @@ Vector2 saber2TargetPosition = saber2Position;
         
         Raylib.DrawGrid(30, 1);
         Raylib.EndMode3D();
-        
+
+        DrawHudPanel(22, 16, 190, 78);
+        DrawHudPanel(545, 16, 190, 78);
+        DrawHudPanel(1030, 16, 228, 78);
         DrawUiText("SCORE", 36, 22, 18, Color.LightGray);
         DrawUiText(score.ToString(), 36, 44, 30, Color.White);
         DrawUiText("COMBO", 600, 22, 18, Color.LightGray);
@@ -571,6 +574,8 @@ Vector2 saber2TargetPosition = saber2Position;
             Raylib.DrawCube(new Vector3(0f, 5.55f, depth), 11f, 0.22f, 0.22f, frameColor);
             Raylib.DrawCube(new Vector3(-4.4f, 0.12f, depth), 1.8f, 0.16f, 0.2f, accentColor);
             Raylib.DrawCube(new Vector3(4.4f, 0.12f, depth), 1.8f, 0.16f, 0.2f, accentColor);
+            Raylib.DrawCube(new Vector3(-3.95f, 3.8f, depth), 0.06f, 0.7f, 0.05f, new Color((byte)35, (byte)145, (byte)255, (byte)(55 + distanceFade * 65)));
+            Raylib.DrawCube(new Vector3(3.95f, 3.8f, depth), 0.06f, 0.7f, 0.05f, new Color((byte)35, (byte)145, (byte)255, (byte)(55 + distanceFade * 65)));
         }
 
         float[] floorRails = { -4.6f, -3.2f, -1.8f, 1.8f, 3.2f, 4.6f };
@@ -578,6 +583,9 @@ Vector2 saber2TargetPosition = saber2Position;
         {
             Raylib.DrawCube(new Vector3(x, 0.04f, -11f), 0.025f, 0.04f, 42f, new Color((byte)24, (byte)38, (byte)52, (byte)135));
         }
+
+        Raylib.DrawCube(new Vector3(-5.1f, 0.22f, -11f), 0.09f, 0.06f, 42f, new Color((byte)20, (byte)105, (byte)205, (byte)115));
+        Raylib.DrawCube(new Vector3(5.1f, 0.22f, -11f), 0.09f, 0.06f, 42f, new Color((byte)20, (byte)105, (byte)205, (byte)115));
 
         for (int i = 0; i < 9; i++)
         {
@@ -638,6 +646,20 @@ Vector2 saber2TargetPosition = saber2Position;
     {
         float scale = UiScale();
         Raylib.DrawRectangle(UiX(x), UiY(y), Math.Max(1, (int)MathF.Round(width * scale)), Math.Max(1, (int)MathF.Round(height * scale)), color);
+    }
+
+    void DrawHudPanel(float x, float y, float width, float height)
+    {
+        DrawUiRectangle(x, y, width, height, new Color((byte)3, (byte)17, (byte)35, (byte)210));
+        float scale = UiScale();
+        int left = UiX(x);
+        int top = UiY(y);
+        int panelWidth = Math.Max(1, (int)MathF.Round(width * scale));
+        int panelHeight = Math.Max(1, (int)MathF.Round(height * scale));
+        Color edge = new Color((byte)35, (byte)150, (byte)255, (byte)190);
+        Raylib.DrawRectangleLines(left, top, panelWidth, panelHeight, edge);
+        Raylib.DrawLine(left + (int)(8 * scale), top, left + (int)(24 * scale), top, Color.White);
+        Raylib.DrawLine(left + panelWidth - (int)(24 * scale), top + panelHeight, left + panelWidth - (int)(8 * scale), top + panelHeight, edge);
     }
 
     void DrawUiOverlay(Color color)
