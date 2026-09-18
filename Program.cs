@@ -5,6 +5,8 @@ using System.IO;
 
 Raylib.InitWindow(1280, 720, "Two Saber");
 Raylib.SetTargetFPS(60);
+int windowedWidth = 1280;
+int windowedHeight = 720;
 
 TwoMouseInput twoMice = new TwoMouseInput();
 
@@ -79,6 +81,30 @@ Vector2 saber2TargetPosition = saber2Position;
     while (!Raylib.WindowShouldClose())
     {
         float deltaTime = Raylib.GetFrameTime();
+
+        if (Raylib.IsKeyPressed(KeyboardKey.F11))
+        {
+            if (!Raylib.IsWindowFullscreen())
+            {
+                windowedWidth = Raylib.GetScreenWidth();
+                windowedHeight = Raylib.GetScreenHeight();
+                int monitor = Raylib.GetCurrentMonitor();
+                Raylib.SetWindowSize(Raylib.GetMonitorWidth(monitor), Raylib.GetMonitorHeight(monitor));
+                Raylib.SetWindowMonitor(monitor);
+                Raylib.ToggleFullscreen();
+            }
+            else
+            {
+                Raylib.ToggleFullscreen();
+                Raylib.SetWindowSize(Math.Max(960, windowedWidth), Math.Max(540, windowedHeight));
+            }
+        }
+
+        bool showCursor = gameState != GameState.Playing;
+        if (showCursor)
+            Raylib.ShowCursor();
+        else
+            Raylib.HideCursor();
 
         if (Raylib.IsKeyPressed(KeyboardKey.Escape))
         {
@@ -308,63 +334,63 @@ Vector2 saber2TargetPosition = saber2Position;
         Raylib.DrawGrid(30, 1);
         Raylib.EndMode3D();
         
-        Raylib.DrawText($"SCORE: {score}", 1030, 20, 25, Color.White);
+        DrawUiText($"SCORE: {score}", 1030, 20, 25, Color.White);
         Color lifeColor = lives == 3 ? Color.Green : (lives == 2 ? Color.Yellow : Color.Red);
-        Raylib.DrawText($"LIVES: {LivesDisplay()}", 1010, 50, 25, lifeColor);
-        Raylib.DrawText($"COMBO: {combo}", 1030, 80, 25, Color.Yellow);
+        DrawUiText($"LIVES: {LivesDisplay()}", 1010, 50, 25, lifeColor);
+        DrawUiText($"COMBO: {combo}", 1030, 80, 25, Color.Yellow);
 
         if (missFeedbackTimer > 0f)
         {
-            Raylib.DrawRectangle(0, 0, 1280, 720, new Color((byte)180, (byte)0, (byte)0, (byte)35));
-            Raylib.DrawText("MISS!", 570, 300, 42, Color.Red);
+            DrawUiOverlay(new Color((byte)180, (byte)0, (byte)0, (byte)35));
+            DrawUiText("MISS!", 570, 300, 42, Color.Red);
         }
 
         if (comboMessageTimer > 0f)
         {
-            Raylib.DrawText(comboMessage, 510, 245, 42, Color.Yellow);
+            DrawUiText(comboMessage, 510, 245, 42, Color.Yellow);
         }
         
         if (gameState == GameState.AssigningBlue)
         {
-            Raylib.DrawRectangle(0, 0, 1280, 720, new Color((byte)0, (byte)0, (byte)0, (byte)170));
+            DrawUiOverlay(new Color((byte)0, (byte)0, (byte)0, (byte)170));
             DrawStartSabers();
-            Raylib.DrawText("TWO SABER", 470, 105, 54, Color.White);
-            Raylib.DrawText("ASSIGN YOUR SABERS", 390, 190, 54, Color.White);
-            Raylib.DrawText("Left Click with the mouse you want to control", 320, 305, 25, Color.LightGray);
-            Raylib.DrawText("the BLUE SABER", 500, 340, 30, Color.Blue);
+            DrawUiText("TWO SABER", 470, 105, 54, Color.White);
+            DrawUiText("ASSIGN YOUR SABERS", 390, 190, 54, Color.White);
+            DrawUiText("Left Click with the mouse you want to control", 320, 305, 25, Color.LightGray);
+            DrawUiText("the BLUE SABER", 500, 340, 30, Color.Blue);
         }
 
         if (gameState == GameState.AssigningRed)
         {
-            Raylib.DrawRectangle(0, 0, 1280, 720, new Color((byte)0, (byte)0, (byte)0, (byte)170));
+            DrawUiOverlay(new Color((byte)0, (byte)0, (byte)0, (byte)170));
             DrawStartSabers();
-            Raylib.DrawText("TWO SABER", 470, 105, 54, Color.White);
-            Raylib.DrawText("ASSIGN YOUR SABERS", 390, 190, 54, Color.White);
-            Raylib.DrawText("Now Left Click with the other mouse for", 350, 305, 25, Color.LightGray);
-            Raylib.DrawText("the RED SABER", 505, 340, 30, Color.Red);
+            DrawUiText("TWO SABER", 470, 105, 54, Color.White);
+            DrawUiText("ASSIGN YOUR SABERS", 390, 190, 54, Color.White);
+            DrawUiText("Now Left Click with the other mouse for", 350, 305, 25, Color.LightGray);
+            DrawUiText("the RED SABER", 505, 340, 30, Color.Red);
         }
 
         if (gameState == GameState.Ready)
         {
-            Raylib.DrawRectangle(0, 0, 1280, 720, new Color((byte)0, (byte)0, (byte)0, (byte)160));
-            Raylib.DrawText("READY", 525, 300, 64, Color.Green);
+            DrawUiOverlay(new Color((byte)0, (byte)0, (byte)0, (byte)160));
+            DrawUiText("READY", 525, 300, 64, Color.Green);
         }
 
         if (wrongHitTimer > 0f)
         {
-            Raylib.DrawRectangle(0, 0, 1280, 720, new Color((byte)255, (byte)120, (byte)0, (byte)45));
-            Raylib.DrawText("WRONG SABER!", 500, 300, 38, Color.Orange);
+            DrawUiOverlay(new Color((byte)255, (byte)120, (byte)0, (byte)45));
+            DrawUiText("WRONG SABER!", 500, 300, 38, Color.Orange);
         }
 
         if (gameState == GameState.GameOver)
         {
-            Raylib.DrawRectangle(0, 0, 1280, 720, new Color((byte)0, (byte)0, (byte)0, (byte)150));
-            Raylib.DrawText("GAME OVER", 455, 245, 64, Color.Red);
-            Raylib.DrawText($"FINAL SCORE: {score}", 500, 330, 28, Color.White);
-            Raylib.DrawText($"FINAL COMBO: {bestCombo}", 500, 370, 28, Color.Yellow);
-            Raylib.DrawText($"LIVES: {LivesDisplay()}", 500, 410, 28, Color.Red);
-            Raylib.DrawText("Press R to Restart", 500, 475, 28, Color.White);
-            Raylib.DrawText("Press Escape to Quit", 500, 515, 24, Color.LightGray);
+            DrawUiOverlay(new Color((byte)0, (byte)0, (byte)0, (byte)150));
+            DrawUiText("GAME OVER", 455, 245, 64, Color.Red);
+            DrawUiText($"FINAL SCORE: {score}", 500, 330, 28, Color.White);
+            DrawUiText($"FINAL COMBO: {bestCombo}", 500, 370, 28, Color.Yellow);
+            DrawUiText($"LIVES: {LivesDisplay()}", 500, 410, 28, Color.Red);
+            DrawUiText("Press R to Restart", 500, 475, 28, Color.White);
+            DrawUiText("Press Escape to Quit", 500, 515, 24, Color.LightGray);
         }
         
         Raylib.EndDrawing();
@@ -484,12 +510,46 @@ Vector2 saber2TargetPosition = saber2Position;
 
     void DrawStartSabers()
     {
-        Raylib.DrawRectangle(405, 390, 18, 115, Color.Blue);
-        Raylib.DrawRectangle(857, 390, 18, 115, Color.Red);
-        Raylib.DrawRectangle(400, 385, 28, 125, new Color((byte)30, (byte)120, (byte)255, (byte)90));
-        Raylib.DrawRectangle(852, 385, 28, 125, new Color((byte)255, (byte)30, (byte)30, (byte)90));
-        Raylib.DrawText("BLUE", 390, 525, 22, Color.Blue);
-        Raylib.DrawText("RED", 850, 525, 22, Color.Red);
+        DrawUiRectangle(405, 390, 18, 115, Color.Blue);
+        DrawUiRectangle(857, 390, 18, 115, Color.Red);
+        DrawUiRectangle(400, 385, 28, 125, new Color((byte)30, (byte)120, (byte)255, (byte)90));
+        DrawUiRectangle(852, 385, 28, 125, new Color((byte)255, (byte)30, (byte)30, (byte)90));
+        DrawUiText("BLUE", 390, 525, 22, Color.Blue);
+        DrawUiText("RED", 850, 525, 22, Color.Red);
+    }
+
+    float UiScale()
+    {
+        return MathF.Min(Raylib.GetScreenWidth() / 1280f, Raylib.GetScreenHeight() / 720f);
+    }
+
+    int UiX(float x)
+    {
+        float scale = UiScale();
+        return (int)MathF.Round((Raylib.GetScreenWidth() - 1280f * scale) * 0.5f + x * scale);
+    }
+
+    int UiY(float y)
+    {
+        float scale = UiScale();
+        return (int)MathF.Round((Raylib.GetScreenHeight() - 720f * scale) * 0.5f + y * scale);
+    }
+
+    void DrawUiText(string text, float x, float y, float size, Color color)
+    {
+        float scale = UiScale();
+        Raylib.DrawText(text, UiX(x), UiY(y), Math.Max(12, (int)MathF.Round(size * scale)), color);
+    }
+
+    void DrawUiRectangle(float x, float y, float width, float height, Color color)
+    {
+        float scale = UiScale();
+        Raylib.DrawRectangle(UiX(x), UiY(y), Math.Max(1, (int)MathF.Round(width * scale)), Math.Max(1, (int)MathF.Round(height * scale)), color);
+    }
+
+    void DrawUiOverlay(Color color)
+    {
+        Raylib.DrawRectangle(0, 0, Raylib.GetScreenWidth(), Raylib.GetScreenHeight(), color);
     }
 
     void UpdateSwing(Vector2 mouseDelta, float deltaTime, List<Vector3> directionHistory, ref Vector3 direction, ref float speed, ref float angle, ref float angularVelocity)
@@ -565,8 +625,8 @@ Vector2 saber2TargetPosition = saber2Position;
     {
         float difficulty = Math.Clamp(elapsedTime / 180f, 0f, 1f);
         PatternType pattern = ChoosePattern(difficulty);
-        float z = -24f;
-        float sequenceSpacing = 4.2f + difficulty * 0.25f;
+        float z = -30f;
+        float sequenceSpacing = 3.4f + difficulty * 0.15f;
         int waveStart = objects.Count;
 
         switch (pattern)
@@ -632,7 +692,7 @@ Vector2 saber2TargetPosition = saber2Position;
         for (int i = waveStart; i < objects.Count; i++)
         {
             GameObject first = objects[i];
-            if (first.Position.Z > -20f || first.Position.X < -2.2f || first.Position.X > 2.2f || first.Position.Y < 0.8f || first.Position.Y > 2f)
+            if (first.Position.Z > -18.5f || first.Position.X < -2.2f || first.Position.X > 2.2f || first.Position.Y < 0.8f || first.Position.Y > 2f)
             {
                 return false;
             }
