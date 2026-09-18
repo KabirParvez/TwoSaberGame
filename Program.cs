@@ -42,6 +42,7 @@ Vector2 saber2TargetPosition = saber2Position;
     List<TrailPoint> redTrail = new List<TrailPoint>();
     List<HitFlash> hitFlashes = new List<HitFlash>();
     List<SliceMark> sliceMarks = new List<SliceMark>();
+    List<PatternType> recentPatterns = new List<PatternType>();
     Random random = new Random();
     
     float spawnTimer = 0f;
@@ -68,6 +69,8 @@ Vector2 saber2TargetPosition = saber2Position;
     int lives = 3;
     float readyTimer = 0f;
     float wrongHitTimer = 0f;
+    Vector2 blueSaberVelocity = Vector2.Zero;
+    Vector2 redSaberVelocity = Vector2.Zero;
     
     while (!Raylib.WindowShouldClose())
     {
@@ -136,9 +139,8 @@ Vector2 saber2TargetPosition = saber2Position;
         saber2TargetPosition.X = Math.Clamp(saber2TargetPosition.X, 50, 1230);
         saber2TargetPosition.Y = Math.Clamp(saber2TargetPosition.Y, 50, 670);
 
-        float positionBlend = 1f - MathF.Exp(-18f * deltaTime);
-        saber1Position = Vector2.Lerp(saber1Position, saber1TargetPosition, positionBlend);
-        saber2Position = Vector2.Lerp(saber2Position, saber2TargetPosition, positionBlend);
+        UpdateSaberMotion(ref saber1Position, saber1TargetPosition, ref blueSaberVelocity, deltaTime);
+        UpdateSaberMotion(ref saber2Position, saber2TargetPosition, ref redSaberVelocity, deltaTime);
         
         float saber1X = (saber1Position.X - 640) / 200f;
         float saber1Y = -(saber1Position.Y - 360) / 200f;
@@ -163,8 +165,7 @@ Vector2 saber2TargetPosition = saber2Position;
             spawnTimer -= deltaTime;
             if (spawnTimer <= 0f)
             {
-                SpawnFormation();
-                spawnTimer = spawnInterval;
+                spawnTimer = SpawnFormation(spawnInterval);
             }
 
             foreach (GameObject obj in objects)
@@ -179,9 +180,11 @@ Vector2 saber2TargetPosition = saber2Position;
                 GameObject obj = objects[i];
                 Vector3 matchingSaber = obj.IsBlue ? saber1 : saber2;
                 Vector3 wrongSaber = obj.IsBlue ? saber2 : saber1;
+                Vector3 matchingBladeEnd = obj.IsBlue ? GetBladeEnd(saber1, blueSaberAngle) : GetBladeEnd(saber2, redSaberAngle);
+                Vector3 wrongBladeEnd = obj.IsBlue ? GetBladeEnd(saber2, redSaberAngle) : GetBladeEnd(saber1, blueSaberAngle);
                 Vector3 swingDirection = obj.IsBlue ? blueSwingDirection : redSwingDirection;
                 float swingSpeed = obj.IsBlue ? blueSwingSpeed : redSwingSpeed;
-                float wrongDistance = Vector3.Distance(wrongSaber, obj.Position);
+                float wrongDistance = DistanceToSegment(obj.Position, wrongSaber, wrongBladeEnd);
 
                 if (wrongDistance >= 1.5f)
                 {
@@ -196,7 +199,7 @@ Vector2 saber2TargetPosition = saber2Position;
                     continue;
                 }
 
-                if (Vector3.Distance(matchingSaber, obj.Position) < 1.5f)
+                if (DistanceToSegment(obj.Position, matchingSaber, matchingBladeEnd) < 1.25f)
                 {
                     float slicePower = Math.Clamp(swingSpeed / 850f, 0f, 1f);
                     SliceObject(obj, swingDirection, slicePower);
@@ -375,12 +378,15 @@ Vector2 saber2TargetPosition = saber2Position;
         sliceMarks.Clear();
         blueTrail.Clear();
         redTrail.Clear();
+        recentPatterns.Clear();
         blueMouseIndex = -1;
         redMouseIndex = -1;
         saber1Position = new Vector2(400, 360);
         saber2Position = new Vector2(880, 360);
         saber1TargetPosition = saber1Position;
         saber2TargetPosition = saber2Position;
+        blueSaberVelocity = Vector2.Zero;
+        redSaberVelocity = Vector2.Zero;
         blueSaberAngle = MathF.PI / 2f;
         redSaberAngle = MathF.PI / 2f;
         spawnTimer = 0f;
@@ -396,6 +402,43 @@ Vector2 saber2TargetPosition = saber2Position;
         comboMessage = string.Empty;
         comboMessageTimer = 0f;
         wrongHitTimer = 0f;
+    }
+
+    void UpdateSaberMotion(ref Vector2 position, Vector2 target, ref Vector2 velocity, float deltaTime)
+    {
+        Vector2 error = target - position;
+        Vector2 springForce = error * 115f;
+        velocity += springForce * deltaTime;
+        velocity *= MathF.Exp(-13f * deltaTime);
+
+        float maxVelocity = 900f;
+        if (velocity.LengthSquared() > maxVelocity * maxVelocity)
+        {
+            velocity = Vector2.Normalize(velocity) * maxVelocity;
+        }
+
+        position += velocity * deltaTime;
+        position = Vector2.Clamp(position, new Vector2(50f, 50f), new Vector2(1230f, 670f));
+    }
+
+    Vector3 GetBladeEnd(Vector3 handle, float angle)
+    {
+        Vector3 bladeDirection = new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
+        return handle + bladeDirection * 2.7f;
+    }
+
+    float DistanceToSegment(Vector3 point, Vector3 start, Vector3 end)
+    {
+        Vector3 segment = end - start;
+        float lengthSquared = segment.LengthSquared();
+        if (lengthSquared < 0.0001f)
+        {
+            return Vector3.Distance(point, start);
+        }
+
+        float projection = Vector3.Dot(point - start, segment) / lengthSquared;
+        projection = Math.Clamp(projection, 0f, 1f);
+        return Vector3.Distance(point, start + segment * projection);
     }
 
     void LoseLife(bool wrongColor)
@@ -473,70 +516,126 @@ Vector2 saber2TargetPosition = saber2Position;
         return value == 5 || value == 10 || value == 20 || value % 10 == 0;
     }
 
-    void SpawnFormation()
+    float SpawnFormation(float baseInterval)
     {
-        int formation = formationNumber++;
-        float z = -20f;
+        float difficulty = Math.Clamp(elapsedTime / 180f, 0f, 1f);
+        PatternType pattern = ChoosePattern(difficulty);
+        float z = -24f;
+        float sequenceSpacing = 3.6f - difficulty * 0.7f;
 
-        if (elapsedTime < 20f)
+        switch (pattern)
         {
-            AddTarget(RandomLanePosition(), random.Next(2) == 0, z);
-            return;
+            case PatternType.BlueSingle:
+                AddTarget(Lane(-1), true, z);
+                break;
+            case PatternType.RedSingle:
+                AddTarget(Lane(1), false, z);
+                break;
+            case PatternType.CenterSingle:
+                AddTarget(Lane(0), random.Next(2) == 0, z);
+                break;
+            case PatternType.BlueRedPair:
+                AddTarget(Lane(-1), true, z);
+                AddTarget(Lane(1), false, z);
+                break;
+            case PatternType.RedBluePair:
+                AddTarget(Lane(-1), false, z);
+                AddTarget(Lane(1), true, z);
+                break;
+            case PatternType.BlueSplitPair:
+                AddTarget(Lane(-1), true, z);
+                AddTarget(Lane(1), true, z);
+                break;
+            case PatternType.RedSplitPair:
+                AddTarget(Lane(-1), false, z);
+                AddTarget(Lane(1), false, z);
+                break;
+            case PatternType.BlueRedBlue:
+                AddSequence(new[] { true, false, true }, new[] { -2, 0, 2 }, z, sequenceSpacing);
+                break;
+            case PatternType.RedBlueRed:
+                AddSequence(new[] { false, true, false }, new[] { 2, 0, -2 }, z, sequenceSpacing);
+                break;
+            case PatternType.BlueBlueRed:
+                AddSequence(new[] { true, true, false }, new[] { -1, 0, 1 }, z, sequenceSpacing);
+                break;
+            case PatternType.RedRedBlue:
+                AddSequence(new[] { false, false, true }, new[] { 1, 0, -1 }, z, sequenceSpacing);
+                break;
+            case PatternType.AlternatingFour:
+                AddSequence(new[] { true, false, true, false }, new[] { -2, -1, 1, 2 }, z, sequenceSpacing);
+                break;
+            case PatternType.ReverseAlternatingFour:
+                AddSequence(new[] { false, true, false, true }, new[] { 2, 1, -1, -2 }, z, sequenceSpacing);
+                break;
         }
 
-        if (elapsedTime < 45f)
+        float rhythmGap = random.NextSingle() < 0.16f ? 1.25f : (random.NextSingle() < 0.3f ? 0.92f : 1f);
+        formationNumber++;
+        return baseInterval * rhythmGap;
+    }
+
+    PatternType ChoosePattern(float difficulty)
+    {
+        PatternType[] simple = { PatternType.BlueSingle, PatternType.RedSingle, PatternType.CenterSingle };
+        PatternType[] medium = { PatternType.BlueRedPair, PatternType.RedBluePair, PatternType.BlueSplitPair, PatternType.RedSplitPair, PatternType.BlueBlueRed, PatternType.RedRedBlue };
+        PatternType[] complex = { PatternType.BlueRedBlue, PatternType.RedBlueRed, PatternType.AlternatingFour, PatternType.ReverseAlternatingFour };
+        PatternType[] pool;
+
+        float roll = random.NextSingle();
+        if (difficulty < 0.22f || (difficulty < 0.5f && roll < 0.55f))
         {
-            switch (formation % 3)
+            pool = simple;
+        }
+        else if (difficulty < 0.75f || roll < 0.8f)
+        {
+            pool = medium;
+        }
+        else
+        {
+            pool = complex;
+        }
+
+        for (int attempt = 0; attempt < 8; attempt++)
+        {
+            PatternType candidate = pool[random.Next(pool.Length)];
+            if (IsPatternReachable(candidate, difficulty) && !recentPatterns.Contains(candidate))
             {
-                case 0:
-                    AddTarget(new Vector3(-1.05f, 1.35f, z), true, z);
-                    AddTarget(new Vector3(1.05f, 1.35f, z), false, z);
-                    break;
-                case 1:
-                    AddAlternatingSequence(z, 3);
-                    break;
-                default:
-                    AddTarget(new Vector3(-1.05f, 1.35f, z), true, z);
-                    AddTarget(new Vector3(1.05f, 1.35f, z), false, z);
-                    break;
+                recentPatterns.Add(candidate);
+                if (recentPatterns.Count > 3)
+                    recentPatterns.RemoveAt(0);
+                return candidate;
             }
-            return;
         }
 
-        switch (formation % 4)
-        {
-            case 0:
-                AddAlternatingSequence(z, 5);
-                break;
-            case 1:
-                AddTarget(new Vector3(-1.15f, 1.4f, z), true, z);
-                AddTarget(new Vector3(1.15f, 1.4f, z), false, z);
-                break;
-            case 2:
-                AddAlternatingSequence(z, 4);
-                break;
-            default:
-                AddTarget(RandomLanePosition(), random.Next(2) == 0, z);
-                break;
-        }
+        PatternType fallback = IsPatternReachable(pool[0], difficulty) ? pool[0] : PatternType.CenterSingle;
+        recentPatterns.Add(fallback);
+        if (recentPatterns.Count > 3)
+            recentPatterns.RemoveAt(0);
+        return fallback;
     }
 
-    void AddAlternatingSequence(float z, int count)
+    bool IsPatternReachable(PatternType pattern, float difficulty)
     {
-        float[] lanes = { -2.1f, -0.7f, 0.7f, 2.1f, 0f };
-
-        for (int i = 0; i < count; i++)
-        {
-            bool isBlue = i % 2 == 0;
-            Vector3 position = new Vector3(lanes[i], 1.35f, z - i * 2.4f);
-            AddTarget(position, isBlue, position.Z);
-        }
+        bool sameSaberPair = pattern == PatternType.BlueSplitPair || pattern == PatternType.RedSplitPair;
+        bool longSequence = pattern == PatternType.AlternatingFour || pattern == PatternType.ReverseAlternatingFour;
+        float minimumSequenceGap = 2.8f - difficulty * 0.35f;
+        return (!sameSaberPair || difficulty > 0.12f) && (!longSequence || minimumSequenceGap >= 2.45f);
     }
 
-    Vector3 RandomLanePosition()
+    Vector3 Lane(int lane)
     {
         float[] lanes = { -2.1f, -1.05f, 0f, 1.05f, 2.1f };
-        return new Vector3(lanes[random.Next(lanes.Length)], 1.35f, -20f);
+        return new Vector3(lanes[Math.Clamp(lane + 2, 0, 4)], 1.35f, -24f);
+    }
+
+    void AddSequence(bool[] colors, int[] lanes, float z, float spacing)
+    {
+        for (int i = 0; i < colors.Length; i++)
+        {
+            Vector3 position = Lane(lanes[i]);
+            AddTarget(new Vector3(position.X, position.Y, z - i * spacing), colors[i], position.Z);
+        }
     }
 
     void AddTarget(Vector3 position, bool isBlue, float z)
@@ -601,8 +700,8 @@ Vector2 saber2TargetPosition = saber2Position;
     {
         float intensity = Math.Clamp(speed / 1100f, 0f, 1f);
         Vector3 direction = new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
-        Vector3 start = position - direction * 1.35f;
-        Vector3 end = position + direction * 1.35f;
+        Vector3 start = position;
+        Vector3 end = position + direction * 2.7f;
         Color outerColor = color == Color.Blue
             ? new Color((byte)30, (byte)(120 + intensity * 80), (byte)255, (byte)(80 + intensity * 60))
             : new Color((byte)255, (byte)(30 + intensity * 80), (byte)(30 + intensity * 40), (byte)(80 + intensity * 60));
@@ -784,6 +883,23 @@ Vector2 saber2TargetPosition = saber2Position;
         Ready,
         Playing,
         GameOver
+    }
+
+    public enum PatternType
+    {
+        BlueSingle,
+        RedSingle,
+        CenterSingle,
+        BlueRedPair,
+        RedBluePair,
+        BlueSplitPair,
+        RedSplitPair,
+        BlueRedBlue,
+        RedBlueRed,
+        BlueBlueRed,
+        RedRedBlue,
+        AlternatingFour,
+        ReverseAlternatingFour
     }
 
     public class ProceduralAudio
