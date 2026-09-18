@@ -986,6 +986,9 @@ Vector2 saber2TargetPosition = saber2Position;
         Raylib.DrawSphere(end, 0.16f + intensity * 0.025f, outerColor);
         Raylib.DrawSphere(end, 0.095f, coreColor);
         Raylib.DrawSphere(collarEnd, 0.12f + intensity * 0.02f, coreColor);
+        Raylib.DrawLine3D(start, end, shellColor);
+        Raylib.DrawLine3D(start, end, Color.White);
+        Raylib.DrawSphere(start, 0.105f, coreColor);
         Raylib.DrawSphere(gripStart, 0.13f, Color.DarkGray);
         Raylib.DrawSphere(gripStart, 0.075f, Color.Black);
     }
