@@ -182,8 +182,8 @@ Vector2 saber2TargetPosition = saber2Position;
 
         UpdateSwing(mouse1, deltaTime, blueDirectionHistory, ref blueSwingDirection, ref blueSwingSpeed, ref blueSaberAngle, ref blueAngularVelocity);
         UpdateSwing(mouse2, deltaTime, redDirectionHistory, ref redSwingDirection, ref redSwingSpeed, ref redSaberAngle, ref redAngularVelocity);
-        TrackTrail(blueTrail, GetBladeEnd(saber1, blueSaberAngle), blueSwingSpeed, deltaTime);
-        TrackTrail(redTrail, GetBladeEnd(saber2, redSaberAngle), redSwingSpeed, deltaTime);
+        TrackTrail(blueTrail, GetBladeEnd(saber1, blueSaberAngle), blueSwingSpeed, blueAngularVelocity, deltaTime);
+        TrackTrail(redTrail, GetBladeEnd(saber2, redSaberAngle), redSwingSpeed, redAngularVelocity, deltaTime);
         audio.UpdateSabers(gameState == GameState.Playing, blueSwingSpeed, redSwingSpeed, blueSwingDirection, redSwingDirection, blueAngularVelocity, redAngularVelocity, deltaTime);
         
         if (gameState == GameState.Playing)
@@ -295,8 +295,8 @@ Vector2 saber2TargetPosition = saber2Position;
         Raylib.DrawPlane(new Vector3(0, 0, 0), new Vector2(30, 30), Color.DarkGray);
         DrawTrail(blueTrail, true);
         DrawTrail(redTrail, false);
-        DrawSaber(saber1, Color.Blue, blueSaberAngle, blueSwingSpeed);
-        DrawSaber(saber2, Color.Red, redSaberAngle, redSwingSpeed);
+        DrawSaber(saber1, Color.Blue, blueSaberAngle, blueSwingSpeed, blueAngularVelocity);
+        DrawSaber(saber2, Color.Red, redSaberAngle, redSwingSpeed, redAngularVelocity);
         
         foreach (GameObject obj in objects)
         {
@@ -792,7 +792,7 @@ Vector2 saber2TargetPosition = saber2Position;
         });
     }
 
-    void TrackTrail(List<TrailPoint> trail, Vector3 position, float speed, float deltaTime)
+    void TrackTrail(List<TrailPoint> trail, Vector3 position, float speed, float angularVelocity, float deltaTime)
     {
         for (int i = trail.Count - 1; i >= 0; i--)
         {
@@ -805,13 +805,14 @@ Vector2 saber2TargetPosition = saber2Position;
 
         if (trail.Count == 0 || Vector3.DistanceSquared(trail[^1].Position, position) > 0.0001f)
         {
-            float lifetime = 0.12f + Math.Clamp(speed / 1800f, 0f, 1f) * 0.28f;
+            float motionEnergy = Math.Clamp(speed / 1800f + MathF.Abs(angularVelocity) / 12f * 0.45f, 0f, 1f);
+            float lifetime = 0.1f + motionEnergy * 0.3f;
             trail.Add(new TrailPoint
             {
                 Position = position,
                 Lifetime = lifetime,
                 MaxLifetime = lifetime,
-                Strength = Math.Clamp(speed / 1100f, 0f, 1f)
+                Strength = motionEnergy
             });
         }
 
@@ -844,21 +845,26 @@ Vector2 saber2TargetPosition = saber2Position;
         }
     }
 
-    void DrawSaber(Vector3 position, Color color, float angle, float speed)
+    void DrawSaber(Vector3 position, Color color, float angle, float speed, float angularVelocity)
     {
-        float intensity = Math.Clamp(speed / 1100f, 0f, 1f);
+        float intensity = Math.Clamp(speed / 1100f + MathF.Abs(angularVelocity) / 12f * 0.35f, 0f, 1f);
         Vector3 direction = new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
         Vector3 start = position;
         Vector3 end = position + direction * 2.7f;
+        Vector3 hiltEnd = position - direction * 0.26f;
+        Vector3 collarEnd = position + direction * 0.08f;
         Color outerColor = color == Color.Blue
             ? new Color((byte)30, (byte)(120 + intensity * 80), (byte)255, (byte)(80 + intensity * 60))
             : new Color((byte)255, (byte)(30 + intensity * 80), (byte)(30 + intensity * 40), (byte)(80 + intensity * 60));
 
+        Raylib.DrawCylinderEx(hiltEnd, collarEnd, 0.14f, 0.14f, 8, Color.DarkGray);
+        Raylib.DrawCylinderEx(hiltEnd - direction * 0.03f, hiltEnd + direction * 0.03f, 0.19f, 0.19f, 8, Color.Black);
+        Raylib.DrawCylinderEx(position - direction * 0.02f, position + direction * 0.11f, 0.2f + intensity * 0.025f, 0.2f + intensity * 0.025f, 10, outerColor);
         Raylib.DrawCylinderEx(start, end, 0.17f + intensity * 0.05f, 0.17f + intensity * 0.05f, 10, outerColor);
         Raylib.DrawCylinderEx(start, end, 0.095f + intensity * 0.02f, 0.095f + intensity * 0.02f, 10, color);
         Raylib.DrawCylinderEx(start, end, 0.035f, 0.035f, 8, Color.White);
-        Raylib.DrawSphere(position, 0.13f, Color.DarkGray);
-        Raylib.DrawSphere(position, 0.075f, Color.Black);
+        Raylib.DrawSphere(hiltEnd, 0.13f, Color.DarkGray);
+        Raylib.DrawSphere(hiltEnd, 0.075f, Color.Black);
     }
 
     void DrawTarget(GameObject obj)
