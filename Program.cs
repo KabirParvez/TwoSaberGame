@@ -158,7 +158,7 @@ Vector2 saber2TargetPosition = saber2Position;
         UpdateSwing(mouse2, deltaTime, redDirectionHistory, ref redSwingDirection, ref redSwingSpeed, ref redSaberAngle, ref redAngularVelocity);
         TrackTrail(blueTrail, GetBladeEnd(saber1, blueSaberAngle), blueSwingSpeed, deltaTime);
         TrackTrail(redTrail, GetBladeEnd(saber2, redSaberAngle), redSwingSpeed, deltaTime);
-        audio.UpdateSabers(gameState == GameState.Playing, blueSwingSpeed, redSwingSpeed, blueSwingDirection, redSwingDirection, deltaTime);
+        audio.UpdateSabers(gameState == GameState.Playing, blueSwingSpeed, redSwingSpeed, blueSwingDirection, redSwingDirection, blueAngularVelocity, redAngularVelocity, deltaTime);
         
         if (gameState == GameState.Playing)
         {
@@ -415,11 +415,11 @@ Vector2 saber2TargetPosition = saber2Position;
     void UpdateSaberMotion(ref Vector2 position, Vector2 target, ref Vector2 velocity, float deltaTime)
     {
         Vector2 error = target - position;
-        Vector2 springForce = error * 115f;
+        Vector2 springForce = error * 155f;
         velocity += springForce * deltaTime;
-        velocity *= MathF.Exp(-13f * deltaTime);
+        velocity *= MathF.Exp(-18f * deltaTime);
 
-        float maxVelocity = 900f;
+        float maxVelocity = 1050f;
         if (velocity.LengthSquared() > maxVelocity * maxVelocity)
         {
             velocity = Vector2.Normalize(velocity) * maxVelocity;
@@ -519,13 +519,25 @@ Vector2 saber2TargetPosition = saber2Position;
             float measuredSpeed = distance / deltaTime;
             float speedBlend = 1f - MathF.Exp(-12f * deltaTime);
             speed += (measuredSpeed - speed) * speedBlend;
-            float movementAngle = MathF.Atan2(direction.Y, direction.X);
-            float wristOffset = Math.Clamp(speed / 1500f, 0f, 1f) * 0.12f;
-            float targetAngle = movementAngle + wristOffset;
-            float angleDifference = MathF.Atan2(MathF.Sin(targetAngle - angle), MathF.Cos(targetAngle - angle));
-            angularVelocity += angleDifference * 34f * deltaTime;
-            angularVelocity = Math.Clamp(angularVelocity, -9f, 9f);
-            angularVelocity *= MathF.Exp(-11f * deltaTime);
+
+            Vector2 bladeDirection = new Vector2(MathF.Cos(angle), MathF.Sin(angle));
+            Vector2 handDirection = new Vector2(direction.X, direction.Y);
+            float torque = bladeDirection.X * handDirection.Y - bladeDirection.Y * handDirection.X;
+            float speedResponse = Math.Clamp(speed / 900f, 0f, 1f);
+            angularVelocity += torque * (22f + speedResponse * 42f) * deltaTime;
+
+            float restingOffset = MathF.Atan2(MathF.Sin(MathF.PI / 2f - angle), MathF.Cos(MathF.PI / 2f - angle));
+            float restingStrength = 1f - speedResponse;
+            angularVelocity += restingOffset * 5f * restingStrength * deltaTime;
+
+            float angleOffset = MathF.Atan2(MathF.Sin(angle - MathF.PI / 2f), MathF.Cos(angle - MathF.PI / 2f));
+            if (MathF.Abs(angleOffset) > 2.15f)
+            {
+                angularVelocity -= MathF.Sign(angleOffset) * (MathF.Abs(angleOffset) - 2.15f) * 18f * deltaTime;
+            }
+
+            angularVelocity = Math.Clamp(angularVelocity, -10f, 10f);
+            angularVelocity *= MathF.Exp(-8.5f * deltaTime);
             angle += angularVelocity * deltaTime;
         }
         else
@@ -533,8 +545,8 @@ Vector2 saber2TargetPosition = saber2Position;
             float stopBlend = 1f - MathF.Exp(-9f * deltaTime);
             speed += (0f - speed) * stopBlend;
             float angleDifference = MathF.Atan2(MathF.Sin(MathF.PI / 2f - angle), MathF.Cos(MathF.PI / 2f - angle));
-            angularVelocity += angleDifference * 18f * deltaTime;
-            angularVelocity *= MathF.Exp(-13f * deltaTime);
+            angularVelocity += angleDifference * 8f * deltaTime;
+            angularVelocity *= MathF.Exp(-11f * deltaTime);
             angle += angularVelocity * deltaTime;
             if (speed < 3f)
             {
@@ -1017,7 +1029,7 @@ Vector2 saber2TargetPosition = saber2Position;
 
         public void PlayGameOver() => Play(_gameOver);
 
-        public void UpdateSabers(bool active, float blueSpeed, float redSpeed, Vector3 blueDirection, Vector3 redDirection, float deltaTime)
+        public void UpdateSabers(bool active, float blueSpeed, float redSpeed, Vector3 blueDirection, Vector3 redDirection, float blueAngularVelocity, float redAngularVelocity, float deltaTime)
         {
             if (!_enabled)
             {
@@ -1036,8 +1048,8 @@ Vector2 saber2TargetPosition = saber2Position;
 
             UpdateHum(_blueHum, blueSpeed);
             UpdateHum(_redHum, redSpeed);
-            TryWhoosh(_blueWhoosh, blueSpeed, blueDirection, ref _blueWhooshCooldown);
-            TryWhoosh(_redWhoosh, redSpeed, redDirection, ref _redWhooshCooldown);
+            TryWhoosh(_blueWhoosh, blueSpeed, blueAngularVelocity, blueDirection, ref _blueWhooshCooldown);
+            TryWhoosh(_redWhoosh, redSpeed, redAngularVelocity, redDirection, ref _redWhooshCooldown);
         }
 
         public void UpdateMusic(float elapsedTime)
@@ -1126,14 +1138,15 @@ Vector2 saber2TargetPosition = saber2Position;
             }
         }
 
-        private static void TryWhoosh(Sound sound, float speed, Vector3 direction, ref float cooldown)
+        private static void TryWhoosh(Sound sound, float speed, float angularVelocity, Vector3 direction, ref float cooldown)
         {
-            if (!Raylib.IsSoundValid(sound) || cooldown > 0f || speed < 180f)
+            float swingMagnitude = MathF.Abs(angularVelocity) * 120f + speed * 0.35f;
+            if (!Raylib.IsSoundValid(sound) || cooldown > 0f || swingMagnitude < 180f)
             {
                 return;
             }
 
-            float intensity = Math.Clamp((speed - 180f) / 900f, 0f, 1f);
+            float intensity = Math.Clamp((swingMagnitude - 180f) / 900f, 0f, 1f);
             float diagonalBoost = 1f - Math.Abs(direction.X * direction.Y);
             SetSoundProfile(sound, 0.08f + intensity * 0.3f, 0.85f + intensity * 0.35f + diagonalBoost * 0.08f);
             Raylib.PlaySound(sound);
