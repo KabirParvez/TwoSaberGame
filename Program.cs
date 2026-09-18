@@ -56,7 +56,7 @@ Vector2 saber2TargetPosition = saber2Position;
     int misses = 0;
     int combo = 0;
     int bestCombo = 0;
-    GameState gameState = GameState.AssigningBlue;
+    GameState gameState = GameState.Start;
     float missFeedbackTimer = 0f;
     float shakeTimer = 0f;
     float shakeStrength = 0f;
@@ -77,6 +77,7 @@ Vector2 saber2TargetPosition = saber2Position;
     float wrongHitTimer = 0f;
     Vector2 blueSaberVelocity = Vector2.Zero;
     Vector2 redSaberVelocity = Vector2.Zero;
+    float environmentTime = 0f;
     
     while (!Raylib.WindowShouldClose())
     {
@@ -111,6 +112,16 @@ Vector2 saber2TargetPosition = saber2Position;
             break;
         }
         
+        if (gameState == GameState.Start)
+        {
+            twoMice.GetLeftClick(0);
+            twoMice.GetLeftClick(1);
+            if (Raylib.IsKeyPressed(KeyboardKey.Space))
+            {
+                gameState = GameState.AssigningBlue;
+            }
+        }
+
         if (gameState == GameState.AssigningBlue)
         {
             bool mouse0Clicked = twoMice.GetLeftClick(0);
@@ -153,7 +164,7 @@ Vector2 saber2TargetPosition = saber2Position;
         if (gameState == GameState.GameOver && Raylib.IsKeyPressed(KeyboardKey.R))
         {
             ResetGame();
-            gameState = GameState.AssigningBlue;
+            gameState = GameState.Start;
         }
         
         Vector2 rawMouse0 = twoMice.GetDelta(0);
@@ -277,6 +288,7 @@ Vector2 saber2TargetPosition = saber2Position;
         }
         
         UpdateEffects(deltaTime);
+        environmentTime += deltaTime;
         missFeedbackTimer = Math.Max(0f, missFeedbackTimer - deltaTime);
         wrongHitTimer = Math.Max(0f, wrongHitTimer - deltaTime);
         comboMessageTimer = Math.Max(0f, comboMessageTimer - deltaTime);
@@ -292,7 +304,7 @@ Vector2 saber2TargetPosition = saber2Position;
         Raylib.ClearBackground(Color.Black);
         Raylib.BeginMode3D(camera);
         
-        Raylib.DrawPlane(new Vector3(0, 0, 0), new Vector2(30, 30), Color.DarkGray);
+        DrawEnvironment(environmentTime);
         DrawTrail(blueTrail, true);
         DrawTrail(redTrail, false);
         DrawSaber(saber1, Color.Blue, blueSaberAngle, blueSwingSpeed, blueAngularVelocity);
@@ -334,10 +346,13 @@ Vector2 saber2TargetPosition = saber2Position;
         Raylib.DrawGrid(30, 1);
         Raylib.EndMode3D();
         
-        DrawUiText($"SCORE: {score}", 1030, 20, 25, Color.White);
+        DrawUiText("SCORE", 36, 22, 18, Color.LightGray);
+        DrawUiText(score.ToString(), 36, 44, 30, Color.White);
+        DrawUiText("COMBO", 600, 22, 18, Color.LightGray);
+        DrawUiText(combo.ToString(), 620, 44, 30, Color.Yellow);
         Color lifeColor = lives == 3 ? Color.Green : (lives == 2 ? Color.Yellow : Color.Red);
-        DrawUiText($"LIVES: {LivesDisplay()}", 1010, 50, 25, lifeColor);
-        DrawUiText($"COMBO: {combo}", 1030, 80, 25, Color.Yellow);
+        DrawUiText("LIVES", 1080, 22, 18, Color.LightGray);
+        DrawUiText(LivesDisplay(), 1080, 44, 25, lifeColor);
 
         if (missFeedbackTimer > 0f)
         {
@@ -354,26 +369,44 @@ Vector2 saber2TargetPosition = saber2Position;
         {
             DrawUiOverlay(new Color((byte)0, (byte)0, (byte)0, (byte)170));
             DrawStartSabers();
-            DrawUiText("TWO SABER", 470, 105, 54, Color.White);
-            DrawUiText("ASSIGN YOUR SABERS", 390, 190, 54, Color.White);
-            DrawUiText("Left Click with the mouse you want to control", 320, 305, 25, Color.LightGray);
-            DrawUiText("the BLUE SABER", 500, 340, 30, Color.Blue);
+            DrawUiText("TWO SABER", 470, 90, 60, Color.White);
+            DrawUiText("ASSIGN YOUR SABERS", 390, 180, 44, Color.White);
+            DrawUiText("MOUSE 1  ->  BLUE SABER", 430, 270, 25, Color.Blue);
+            DrawUiText("MOUSE 2  ->  RED SABER", 440, 305, 25, Color.Red);
+            DrawUiText("Click the physical mouse you want to assign to BLUE", 300, 350, 22, Color.LightGray);
+            DrawUiText("F11  FULLSCREEN", 520, 585, 20, Color.Gray);
+        }
+
+        if (gameState == GameState.Start)
+        {
+            DrawUiOverlay(new Color((byte)0, (byte)0, (byte)0, (byte)185));
+            DrawStartSabers();
+            DrawUiText("TWO SABER", 470, 120, 64, Color.White);
+            DrawUiText("Two mice. Two sabers. One run.", 455, 235, 24, Color.LightGray);
+            DrawUiText("MOUSE 1  ->  BLUE", 465, 300, 27, Color.Blue);
+            DrawUiText("MOUSE 2  ->  RED", 475, 340, 27, Color.Red);
+            DrawUiText("Match each target with its saber color.", 420, 405, 22, Color.LightGray);
+            DrawUiText("PRESS SPACE TO START", 430, 485, 30, Color.Yellow);
+            DrawUiText("F11  FULLSCREEN", 520, 585, 20, Color.Gray);
         }
 
         if (gameState == GameState.AssigningRed)
         {
             DrawUiOverlay(new Color((byte)0, (byte)0, (byte)0, (byte)170));
             DrawStartSabers();
-            DrawUiText("TWO SABER", 470, 105, 54, Color.White);
-            DrawUiText("ASSIGN YOUR SABERS", 390, 190, 54, Color.White);
-            DrawUiText("Now Left Click with the other mouse for", 350, 305, 25, Color.LightGray);
-            DrawUiText("the RED SABER", 505, 340, 30, Color.Red);
+            DrawUiText("TWO SABER", 470, 90, 60, Color.White);
+            DrawUiText("ASSIGN YOUR SABERS", 390, 180, 44, Color.White);
+            DrawUiText("BLUE ASSIGNED", 500, 270, 24, Color.Blue);
+            DrawUiText("Now click the other physical mouse", 390, 320, 25, Color.LightGray);
+            DrawUiText("to assign the RED SABER", 440, 355, 28, Color.Red);
+            DrawUiText("F11  FULLSCREEN", 520, 585, 20, Color.Gray);
         }
 
         if (gameState == GameState.Ready)
         {
             DrawUiOverlay(new Color((byte)0, (byte)0, (byte)0, (byte)160));
-            DrawUiText("READY", 525, 300, 64, Color.Green);
+            DrawUiText("READY", 525, 285, 64, Color.Green);
+            DrawUiText("Both sabers assigned", 510, 370, 22, Color.LightGray);
         }
 
         if (wrongHitTimer > 0f)
@@ -390,6 +423,7 @@ Vector2 saber2TargetPosition = saber2Position;
             DrawUiText($"FINAL COMBO: {bestCombo}", 500, 370, 28, Color.Yellow);
             DrawUiText($"LIVES: {LivesDisplay()}", 500, 410, 28, Color.Red);
             DrawUiText("Press R to Restart", 500, 475, 28, Color.White);
+            DrawUiText("F11  Fullscreen", 515, 555, 22, Color.Gray);
             DrawUiText("Press Escape to Quit", 500, 515, 24, Color.LightGray);
         }
         
@@ -518,6 +552,65 @@ Vector2 saber2TargetPosition = saber2Position;
         DrawUiText("RED", 850, 525, 22, Color.Red);
     }
 
+    void DrawEnvironment(float time)
+    {
+        Raylib.DrawPlane(new Vector3(0, 0, 0), new Vector2(34, 42), new Color((byte)10, (byte)14, (byte)22, (byte)255));
+        Raylib.DrawCube(new Vector3(0, 5.8f, -11f), 14f, 0.12f, 42f, new Color((byte)8, (byte)12, (byte)20, (byte)255));
+
+        float[] frameDepths = { -30f, -25f, -20f, -15f, -10f, -5f, 0f, 5f };
+        foreach (float depth in frameDepths)
+        {
+            float distanceFade = Math.Clamp((depth + 32f) / 40f, 0f, 1f);
+            byte alpha = (byte)(34 + distanceFade * 42f);
+            Color frameColor = new Color((byte)30, (byte)75, (byte)105, alpha);
+            Color accentColor = new Color((byte)25, (byte)95, (byte)125, (byte)(alpha + 12));
+
+            float frameScale = 0.82f + distanceFade * 0.18f;
+            Raylib.DrawCube(new Vector3(-5.4f * frameScale, 2.8f * frameScale, depth), 0.22f * frameScale, 5.8f * frameScale, 0.22f, frameColor);
+            Raylib.DrawCube(new Vector3(5.4f * frameScale, 2.8f * frameScale, depth), 0.22f * frameScale, 5.8f * frameScale, 0.22f, frameColor);
+            Raylib.DrawCube(new Vector3(0f, 5.55f, depth), 11f, 0.22f, 0.22f, frameColor);
+            Raylib.DrawCube(new Vector3(-4.4f, 0.12f, depth), 1.8f, 0.16f, 0.2f, accentColor);
+            Raylib.DrawCube(new Vector3(4.4f, 0.12f, depth), 1.8f, 0.16f, 0.2f, accentColor);
+        }
+
+        float[] floorRails = { -4.6f, -3.2f, -1.8f, 1.8f, 3.2f, 4.6f };
+        foreach (float x in floorRails)
+        {
+            Raylib.DrawCube(new Vector3(x, 0.04f, -11f), 0.025f, 0.04f, 42f, new Color((byte)24, (byte)38, (byte)52, (byte)135));
+        }
+
+        for (int i = 0; i < 9; i++)
+        {
+            float panelZ = -30f + i * 4.6f;
+            byte panelAlpha = (byte)(32 + i * 5);
+            Raylib.DrawCube(new Vector3(0f, 0.08f, panelZ), 10f, 0.025f, 0.025f, new Color((byte)35, (byte)55, (byte)68, panelAlpha));
+            Raylib.DrawCube(new Vector3(0f, 5.72f, panelZ), 10f, 0.025f, 0.025f, new Color((byte)28, (byte)45, (byte)60, panelAlpha));
+        }
+
+        float[] sidePillars = { -7f, 7f };
+        foreach (float x in sidePillars)
+        {
+            Raylib.DrawCube(new Vector3(x, 2.7f, -11f), 0.35f, 5.4f, 42f, new Color((byte)7, (byte)12, (byte)20, (byte)255));
+            Raylib.DrawCube(new Vector3(x * 0.91f, 2.7f, -11f), 0.06f, 4.8f, 42f, new Color((byte)20, (byte)50, (byte)72, (byte)100));
+        }
+
+        for (int i = 0; i < 12; i++)
+        {
+            float z = -31f + PositiveModulo(time * (1.4f + (i % 3) * 0.18f) + i * 6.7f, 38f);
+            z -= 4f;
+            float x = i % 2 == 0 ? -4.9f : 4.9f;
+            float y = 1.2f + (i % 4) * 0.85f;
+            float length = 0.35f + (i % 3) * 0.16f;
+            float parallaxX = x + MathF.Sin(time * 0.35f + i) * 0.08f;
+            Raylib.DrawLine3D(new Vector3(parallaxX, y, z), new Vector3(parallaxX, y, z + length), new Color((byte)35, (byte)90, (byte)115, (byte)80));
+        }
+    }
+
+    float PositiveModulo(float value, float modulus)
+    {
+        return ((value % modulus) + modulus) % modulus;
+    }
+
     float UiScale()
     {
         return MathF.Min(Raylib.GetScreenWidth() / 1280f, Raylib.GetScreenHeight() / 720f);
@@ -589,7 +682,7 @@ Vector2 saber2TargetPosition = saber2Position;
 
             float restingOffset = MathF.Atan2(MathF.Sin(MathF.PI / 2f - angle), MathF.Cos(MathF.PI / 2f - angle));
             float restingStrength = 1f - speedResponse;
-            angularVelocity += restingOffset * 5f * restingStrength * deltaTime;
+            angularVelocity += restingOffset * 6.5f * restingStrength * deltaTime;
 
             float angleOffset = MathF.Atan2(MathF.Sin(angle - MathF.PI / 2f), MathF.Cos(angle - MathF.PI / 2f));
             if (MathF.Abs(angleOffset) > 2.15f)
@@ -606,8 +699,8 @@ Vector2 saber2TargetPosition = saber2Position;
             float stopBlend = 1f - MathF.Exp(-9f * deltaTime);
             speed += (0f - speed) * stopBlend;
             float angleDifference = MathF.Atan2(MathF.Sin(MathF.PI / 2f - angle), MathF.Cos(MathF.PI / 2f - angle));
-            angularVelocity += angleDifference * 8f * deltaTime;
-            angularVelocity *= MathF.Exp(-11f * deltaTime);
+            angularVelocity += angleDifference * 13f * deltaTime;
+            angularVelocity *= MathF.Exp(-13.5f * deltaTime);
             angle += angularVelocity * deltaTime;
             if (speed < 3f)
             {
@@ -1035,6 +1128,7 @@ Vector2 saber2TargetPosition = saber2Position;
 
     public enum GameState
     {
+        Start,
         AssigningBlue,
         AssigningRed,
         Ready,
