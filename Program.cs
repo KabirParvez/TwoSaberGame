@@ -917,24 +917,34 @@ Vector2 saber2TargetPosition = saber2Position;
 
     void DrawTrail(List<TrailPoint> trail, bool isBlue)
     {
-        Color color = isBlue ? Color.Blue : Color.Red;
-
         for (int i = 1; i < trail.Count; i++)
         {
             TrailPoint previous = trail[i - 1];
             TrailPoint current = trail[i];
-            byte alpha = (byte)Math.Clamp((int)(current.Lifetime / current.MaxLifetime * (120f + current.Strength * 80f)), 0, 200);
-            Color trailColor = isBlue
-                ? new Color((byte)40, (byte)150, (byte)255, alpha)
-                : new Color((byte)255, (byte)60, (byte)60, alpha);
+            float fade = Math.Clamp(current.Lifetime / current.MaxLifetime, 0f, 1f);
+            float strength = fade * (0.35f + current.Strength * 0.65f);
+            float radius = 0.025f + strength * 0.055f;
+            byte outerAlpha = (byte)Math.Clamp((int)(strength * 75f), 0, 75);
+            byte innerAlpha = (byte)Math.Clamp((int)(strength * 175f), 0, 175);
+            Color outerColor = isBlue
+                ? new Color((byte)25, (byte)115, (byte)255, outerAlpha)
+                : new Color((byte)255, (byte)35, (byte)55, outerAlpha);
+            Color innerColor = isBlue
+                ? new Color((byte)120, (byte)205, (byte)255, innerAlpha)
+                : new Color((byte)255, (byte)125, (byte)135, innerAlpha);
 
-            Raylib.DrawLine3D(previous.Position, current.Position, trailColor);
+            Raylib.DrawCylinderEx(previous.Position, current.Position, radius * 2.2f, radius * 2.2f, 6, outerColor);
+            Raylib.DrawCylinderEx(previous.Position, current.Position, radius, radius, 6, innerColor);
         }
 
         if (trail.Count > 0)
         {
             TrailPoint newest = trail[^1];
-            Raylib.DrawSphere(newest.Position, 0.08f, color);
+            float tipGlow = 0.05f + newest.Strength * 0.07f;
+            Color tipColor = isBlue
+                ? new Color((byte)170, (byte)230, (byte)255, (byte)190)
+                : new Color((byte)255, (byte)175, (byte)185, (byte)190);
+            Raylib.DrawSphere(newest.Position, tipGlow, tipColor);
         }
     }
 
@@ -946,18 +956,38 @@ Vector2 saber2TargetPosition = saber2Position;
         Vector3 end = position + direction * 2.7f;
         Vector3 hiltEnd = position - direction * 0.26f;
         Vector3 collarEnd = position + direction * 0.08f;
+        Vector3 gripStart = position - direction * 0.58f;
+        Vector3 gripEnd = position - direction * 0.1f;
         Color outerColor = color == Color.Blue
-            ? new Color((byte)30, (byte)(120 + intensity * 80), (byte)255, (byte)(80 + intensity * 60))
-            : new Color((byte)255, (byte)(30 + intensity * 80), (byte)(30 + intensity * 40), (byte)(80 + intensity * 60));
+            ? new Color((byte)20, (byte)(105 + intensity * 90), (byte)255, (byte)(55 + intensity * 55))
+            : new Color((byte)255, (byte)(25 + intensity * 85), (byte)(45 + intensity * 45), (byte)(55 + intensity * 55));
+        Color shellColor = color == Color.Blue
+            ? new Color((byte)45, (byte)165, (byte)255, (byte)(205 + intensity * 35))
+            : new Color((byte)255, (byte)55, (byte)75, (byte)(205 + intensity * 35));
+        Color coreColor = color == Color.Blue
+            ? new Color((byte)225, (byte)248, (byte)255, (byte)255)
+            : new Color((byte)255, (byte)232, (byte)235, (byte)255);
 
-        Raylib.DrawCylinderEx(hiltEnd, collarEnd, 0.14f, 0.14f, 8, Color.DarkGray);
-        Raylib.DrawCylinderEx(hiltEnd - direction * 0.03f, hiltEnd + direction * 0.03f, 0.19f, 0.19f, 8, Color.Black);
-        Raylib.DrawCylinderEx(position - direction * 0.02f, position + direction * 0.11f, 0.2f + intensity * 0.025f, 0.2f + intensity * 0.025f, 10, outerColor);
-        Raylib.DrawCylinderEx(start, end, 0.17f + intensity * 0.05f, 0.17f + intensity * 0.05f, 10, outerColor);
-        Raylib.DrawCylinderEx(start, end, 0.095f + intensity * 0.02f, 0.095f + intensity * 0.02f, 10, color);
-        Raylib.DrawCylinderEx(start, end, 0.035f, 0.035f, 8, Color.White);
-        Raylib.DrawSphere(hiltEnd, 0.13f, Color.DarkGray);
-        Raylib.DrawSphere(hiltEnd, 0.075f, Color.Black);
+        // Compact metallic hilt, rings, grip, emitter, and pommel all share the existing pivot.
+        Raylib.DrawCylinderEx(gripStart, gripEnd, 0.105f, 0.105f, 10, new Color((byte)38, (byte)42, (byte)48, (byte)255));
+        Raylib.DrawCylinderEx(gripStart + direction * 0.08f, gripStart + direction * 0.14f, 0.135f, 0.135f, 10, Color.DarkGray);
+        Raylib.DrawCylinderEx(gripEnd - direction * 0.02f, gripEnd + direction * 0.08f, 0.145f, 0.145f, 10, Color.DarkGray);
+        Raylib.DrawCylinderEx(gripStart + direction * 0.2f, gripStart + direction * 0.25f, 0.122f, 0.122f, 10, Color.Black);
+        Raylib.DrawCylinderEx(gripStart + direction * 0.36f, gripStart + direction * 0.41f, 0.122f, 0.122f, 10, Color.Black);
+        Raylib.DrawCylinderEx(gripStart - direction * 0.05f, gripStart + direction * 0.02f, 0.16f, 0.16f, 10, Color.Black);
+        Raylib.DrawCylinderEx(hiltEnd, collarEnd, 0.16f, 0.16f, 10, Color.DarkGray);
+        Raylib.DrawCylinderEx(position - direction * 0.03f, position + direction * 0.12f, 0.21f + intensity * 0.025f, 0.21f + intensity * 0.025f, 10, outerColor);
+
+        // Layered energy shell: broad aura, saturated shell, bright inner blade, white-hot core.
+        Raylib.DrawCylinderEx(start, end, 0.235f + intensity * 0.035f, 0.235f + intensity * 0.035f, 12, outerColor);
+        Raylib.DrawCylinderEx(start, end, 0.16f + intensity * 0.02f, 0.16f + intensity * 0.02f, 12, shellColor);
+        Raylib.DrawCylinderEx(start, end, 0.095f, 0.095f, 10, coreColor);
+        Raylib.DrawCylinderEx(start, end, 0.045f, 0.045f, 8, Color.White);
+        Raylib.DrawSphere(end, 0.16f + intensity * 0.025f, outerColor);
+        Raylib.DrawSphere(end, 0.095f, coreColor);
+        Raylib.DrawSphere(collarEnd, 0.12f + intensity * 0.02f, coreColor);
+        Raylib.DrawSphere(gripStart, 0.13f, Color.DarkGray);
+        Raylib.DrawSphere(gripStart, 0.075f, Color.Black);
     }
 
     void DrawTarget(GameObject obj)
