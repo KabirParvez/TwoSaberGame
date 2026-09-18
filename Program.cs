@@ -163,8 +163,9 @@ Vector2 saber2TargetPosition = saber2Position;
         if (gameState == GameState.Playing)
         {
             elapsedTime += deltaTime;
-            float objectSpeed = Math.Min(11.5f, 6f + elapsedTime * 0.16f);
-            float spawnInterval = Math.Max(0.85f, 1.5f - elapsedTime * 0.006f);
+            float difficultyRamp = 1f - MathF.Exp(-elapsedTime / 180f);
+            float objectSpeed = 5f + difficultyRamp * 5.5f;
+            float spawnInterval = 1.85f - difficultyRamp * 0.55f;
 
             spawnTimer -= deltaTime;
             if (spawnTimer <= 0f)
@@ -565,7 +566,8 @@ Vector2 saber2TargetPosition = saber2Position;
         float difficulty = Math.Clamp(elapsedTime / 180f, 0f, 1f);
         PatternType pattern = ChoosePattern(difficulty);
         float z = -24f;
-        float sequenceSpacing = 3.6f - difficulty * 0.7f;
+        float sequenceSpacing = 4.2f + difficulty * 0.25f;
+        int waveStart = objects.Count;
 
         switch (pattern)
         {
@@ -614,9 +616,44 @@ Vector2 saber2TargetPosition = saber2Position;
                 break;
         }
 
+        if (!IsWaveFair(waveStart))
+        {
+            objects.RemoveRange(waveStart, objects.Count - waveStart);
+            return Math.Max(baseInterval, 1.2f);
+        }
+
         float rhythmGap = random.NextSingle() < 0.16f ? 1.25f : (random.NextSingle() < 0.3f ? 0.92f : 1f);
         formationNumber++;
         return baseInterval * rhythmGap;
+    }
+
+    bool IsWaveFair(int waveStart)
+    {
+        for (int i = waveStart; i < objects.Count; i++)
+        {
+            GameObject first = objects[i];
+            if (first.Position.Z > -20f || first.Position.X < -2.2f || first.Position.X > 2.2f || first.Position.Y < 0.8f || first.Position.Y > 2f)
+            {
+                return false;
+            }
+
+            for (int j = i + 1; j < objects.Count; j++)
+            {
+                GameObject second = objects[j];
+                float spatialDistance = Vector3.Distance(first.Position, second.Position);
+                if (spatialDistance < 1.75f)
+                {
+                    return false;
+                }
+
+                if (first.IsBlue == second.IsBlue && MathF.Abs(first.Position.Z - second.Position.Z) < 3.2f)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     PatternType ChoosePattern(float difficulty)
@@ -678,7 +715,8 @@ Vector2 saber2TargetPosition = saber2Position;
         for (int i = 0; i < colors.Length; i++)
         {
             Vector3 position = Lane(lanes[i]);
-            AddTarget(new Vector3(position.X, position.Y, z - i * spacing), colors[i], position.Z);
+            float targetZ = z - i * spacing;
+            AddTarget(new Vector3(position.X, position.Y, targetZ), colors[i], targetZ);
         }
     }
 
