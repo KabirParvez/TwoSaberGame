@@ -20,6 +20,12 @@ public class TwoMouseInput
         Vector2.Zero
     };
 
+    private readonly bool[] _leftClicks =
+    {
+        false,
+        false
+    };
+
     private readonly List<IntPtr> _mouseDevices = new();
 
     private WndProcDelegate? _wndProcDelegate;
@@ -238,6 +244,11 @@ public class TwoMouseInput
                 input.mouse.lLastX,
                 input.mouse.lLastY
             );
+
+            if ((input.mouse.buttons.usButtonFlags & 0x0001) != 0)
+            {
+                _leftClicks[mouseIndex] = true;
+            }
         }
         finally
         {
@@ -255,5 +266,15 @@ public class TwoMouseInput
         _deltas[mouseIndex] = Vector2.Zero;
 
         return delta;
+    }
+
+    public bool GetLeftClick(int mouseIndex)
+    {
+        if (mouseIndex < 0 || mouseIndex > 1)
+            return false;
+
+        bool clicked = _leftClicks[mouseIndex];
+        _leftClicks[mouseIndex] = false;
+        return clicked;
     }
 }

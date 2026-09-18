@@ -49,7 +49,7 @@ Vector2 saber2Position = new Vector2(880, 360);
     int misses = 0;
     int combo = 0;
     int bestCombo = 0;
-    GameState gameState = GameState.Start;
+    GameState gameState = GameState.AssigningBlue;
     float missFeedbackTimer = 0f;
     float shakeTimer = 0f;
     float shakeStrength = 0f;
@@ -59,6 +59,11 @@ Vector2 saber2Position = new Vector2(880, 360);
     Vector3 redSwingDirection = Vector3.UnitX;
     float blueSwingSpeed = 0f;
     float redSwingSpeed = 0f;
+    int blueMouseIndex = -1;
+    int redMouseIndex = -1;
+    int lives = 3;
+    float readyTimer = 0f;
+    float wrongHitTimer = 0f;
     
     while (!Raylib.WindowShouldClose())
     {
@@ -69,21 +74,55 @@ Vector2 saber2Position = new Vector2(880, 360);
             break;
         }
         
-        if (gameState == GameState.Start && Raylib.IsKeyPressed(KeyboardKey.Space))
+        if (gameState == GameState.AssigningBlue)
         {
-            ResetGame();
-            gameState = GameState.Playing;
-            audio.PlayStart();
+            bool mouse0Clicked = twoMice.GetLeftClick(0);
+            bool mouse1Clicked = twoMice.GetLeftClick(1);
+            if (mouse0Clicked)
+            {
+                blueMouseIndex = 0;
+                gameState = GameState.AssigningRed;
+            }
+            else if (mouse1Clicked)
+            {
+                blueMouseIndex = 1;
+                gameState = GameState.AssigningRed;
+            }
+        }
+
+        if (gameState == GameState.AssigningRed)
+        {
+            bool mouse0Clicked = twoMice.GetLeftClick(0);
+            bool mouse1Clicked = twoMice.GetLeftClick(1);
+            int otherMouseIndex = blueMouseIndex == 0 ? 1 : 0;
+            if ((otherMouseIndex == 0 && mouse0Clicked) || (otherMouseIndex == 1 && mouse1Clicked))
+            {
+                redMouseIndex = otherMouseIndex;
+                readyTimer = 1f;
+                gameState = GameState.Ready;
+                audio.PlayStart();
+            }
+        }
+
+        if (gameState == GameState.Ready)
+        {
+            readyTimer -= deltaTime;
+            if (readyTimer <= 0f)
+            {
+                gameState = GameState.Playing;
+            }
         }
 
         if (gameState == GameState.GameOver && Raylib.IsKeyPressed(KeyboardKey.R))
         {
             ResetGame();
-            gameState = GameState.Playing;
+            gameState = GameState.AssigningBlue;
         }
         
-        Vector2 mouse1 = twoMice.GetDelta(0);
-        Vector2 mouse2 = twoMice.GetDelta(1);
+        Vector2 rawMouse0 = twoMice.GetDelta(0);
+        Vector2 rawMouse1 = twoMice.GetDelta(1);
+        Vector2 mouse1 = blueMouseIndex == 0 ? rawMouse0 : rawMouse1;
+        Vector2 mouse2 = redMouseIndex == 0 ? rawMouse0 : rawMouse1;
         
         saber1Position += mouse1;
         saber2Position += mouse2;
@@ -109,8 +148,8 @@ Vector2 saber2Position = new Vector2(880, 360);
         if (gameState == GameState.Playing)
         {
             elapsedTime += deltaTime;
-            float objectSpeed = Math.Min(13f, 8f + elapsedTime * 0.25f);
-            float spawnInterval = Math.Max(0.62f, 1.05f - elapsedTime * 0.007f);
+            float objectSpeed = Math.Min(11.5f, 6f + elapsedTime * 0.16f);
+            float spawnInterval = Math.Max(0.85f, 1.5f - elapsedTime * 0.006f);
 
             spawnTimer -= deltaTime;
             if (spawnTimer <= 0f)
@@ -123,16 +162,32 @@ Vector2 saber2Position = new Vector2(880, 360);
             {
                 obj.Position.Z += objectSpeed * deltaTime;
                 obj.Rotation += deltaTime * 55f;
+                obj.WrongHitCooldown = Math.Max(0f, obj.WrongHitCooldown - deltaTime);
             }
 
             for (int i = objects.Count - 1; i >= 0; i--)
             {
                 GameObject obj = objects[i];
-                Vector3 saber = obj.IsBlue ? saber1 : saber2;
+                Vector3 matchingSaber = obj.IsBlue ? saber1 : saber2;
+                Vector3 wrongSaber = obj.IsBlue ? saber2 : saber1;
                 Vector3 swingDirection = obj.IsBlue ? blueSwingDirection : redSwingDirection;
                 float swingSpeed = obj.IsBlue ? blueSwingSpeed : redSwingSpeed;
+                float wrongDistance = Vector3.Distance(wrongSaber, obj.Position);
 
-                if (Vector3.Distance(saber, obj.Position) < 1.5f)
+                if (wrongDistance >= 1.5f)
+                {
+                    obj.WrongHitActive = false;
+                }
+
+                if (!obj.WrongHitActive && obj.WrongHitCooldown <= 0f && wrongDistance < 1.5f)
+                {
+                    obj.WrongHitCooldown = 0.35f;
+                    obj.WrongHitActive = true;
+                    LoseLife(true);
+                    continue;
+                }
+
+                if (Vector3.Distance(matchingSaber, obj.Position) < 1.5f)
                 {
                     float slicePower = Math.Clamp(swingSpeed / 850f, 0f, 1f);
                     SliceObject(obj, swingDirection, slicePower);
@@ -162,13 +217,13 @@ Vector2 saber2Position = new Vector2(880, 360);
                 if (obj.Position.Z > 7f)
                 {
                     objects.RemoveAt(i);
-                    misses++;
+                    LoseLife(false);
                     combo = 0;
                     missFeedbackTimer = 0.45f;
                     shakeTimer = 0.08f;
                     shakeStrength = 0.035f;
                     audio.PlayMiss();
-                    if (misses >= 3)
+                    if (lives <= 0)
                     {
                         gameState = GameState.GameOver;
                         audio.PlayGameOver();
@@ -180,6 +235,7 @@ Vector2 saber2Position = new Vector2(880, 360);
         
         UpdateEffects(deltaTime);
         missFeedbackTimer = Math.Max(0f, missFeedbackTimer - deltaTime);
+        wrongHitTimer = Math.Max(0f, wrongHitTimer - deltaTime);
         comboMessageTimer = Math.Max(0f, comboMessageTimer - deltaTime);
         shakeTimer = Math.Max(0f, shakeTimer - deltaTime);
         audio.UpdateMusic(elapsedTime);
@@ -236,7 +292,8 @@ Vector2 saber2Position = new Vector2(880, 360);
         Raylib.EndMode3D();
         
         Raylib.DrawText($"SCORE: {score}", 1030, 20, 25, Color.White);
-        Raylib.DrawText($"MISSES: {misses}/3", 1030, 50, 25, misses == 0 ? Color.White : Color.Red);
+        Color lifeColor = lives == 3 ? Color.Green : (lives == 2 ? Color.Yellow : Color.Red);
+        Raylib.DrawText($"LIVES: {LivesDisplay()}", 1010, 50, 25, lifeColor);
         Raylib.DrawText($"COMBO: {combo}", 1030, 80, 25, Color.Yellow);
 
         if (missFeedbackTimer > 0f)
@@ -250,13 +307,36 @@ Vector2 saber2Position = new Vector2(880, 360);
             Raylib.DrawText(comboMessage, 510, 245, 42, Color.Yellow);
         }
         
-        if (gameState == GameState.Start)
+        if (gameState == GameState.AssigningBlue)
         {
             Raylib.DrawRectangle(0, 0, 1280, 720, new Color((byte)0, (byte)0, (byte)0, (byte)170));
-            Raylib.DrawText("TWO SABER", 430, 220, 72, Color.White);
-            Raylib.DrawText("MOUSE 1 = BLUE", 485, 330, 30, Color.Blue);
-            Raylib.DrawText("MOUSE 2 = RED", 490, 370, 30, Color.Red);
-            Raylib.DrawText("PRESS SPACE TO START", 420, 470, 30, Color.Yellow);
+            DrawStartSabers();
+            Raylib.DrawText("TWO SABER", 470, 105, 54, Color.White);
+            Raylib.DrawText("ASSIGN YOUR SABERS", 390, 190, 54, Color.White);
+            Raylib.DrawText("Left Click with the mouse you want to control", 320, 305, 25, Color.LightGray);
+            Raylib.DrawText("the BLUE SABER", 500, 340, 30, Color.Blue);
+        }
+
+        if (gameState == GameState.AssigningRed)
+        {
+            Raylib.DrawRectangle(0, 0, 1280, 720, new Color((byte)0, (byte)0, (byte)0, (byte)170));
+            DrawStartSabers();
+            Raylib.DrawText("TWO SABER", 470, 105, 54, Color.White);
+            Raylib.DrawText("ASSIGN YOUR SABERS", 390, 190, 54, Color.White);
+            Raylib.DrawText("Now Left Click with the other mouse for", 350, 305, 25, Color.LightGray);
+            Raylib.DrawText("the RED SABER", 505, 340, 30, Color.Red);
+        }
+
+        if (gameState == GameState.Ready)
+        {
+            Raylib.DrawRectangle(0, 0, 1280, 720, new Color((byte)0, (byte)0, (byte)0, (byte)160));
+            Raylib.DrawText("READY", 525, 300, 64, Color.Green);
+        }
+
+        if (wrongHitTimer > 0f)
+        {
+            Raylib.DrawRectangle(0, 0, 1280, 720, new Color((byte)255, (byte)120, (byte)0, (byte)45));
+            Raylib.DrawText("WRONG SABER!", 500, 300, 38, Color.Orange);
         }
 
         if (gameState == GameState.GameOver)
@@ -265,7 +345,7 @@ Vector2 saber2Position = new Vector2(880, 360);
             Raylib.DrawText("GAME OVER", 455, 245, 64, Color.Red);
             Raylib.DrawText($"FINAL SCORE: {score}", 500, 330, 28, Color.White);
             Raylib.DrawText($"FINAL COMBO: {bestCombo}", 500, 370, 28, Color.Yellow);
-            Raylib.DrawText($"MISSES: {misses}/3", 500, 410, 28, Color.Red);
+            Raylib.DrawText($"LIVES: {LivesDisplay()}", 500, 410, 28, Color.Red);
             Raylib.DrawText("Press R to Restart", 500, 475, 28, Color.White);
             Raylib.DrawText("Press Escape to Quit", 500, 515, 24, Color.LightGray);
         }
@@ -286,17 +366,56 @@ Vector2 saber2Position = new Vector2(880, 360);
         sliceMarks.Clear();
         blueTrail.Clear();
         redTrail.Clear();
+        blueMouseIndex = -1;
+        redMouseIndex = -1;
         spawnTimer = 0f;
         elapsedTime = 0f;
         formationNumber = 0;
         score = 0;
         misses = 0;
+        lives = 3;
         combo = 0;
         bestCombo = 0;
         missFeedbackTimer = 0f;
         shakeTimer = 0f;
         comboMessage = string.Empty;
         comboMessageTimer = 0f;
+        wrongHitTimer = 0f;
+    }
+
+    void LoseLife(bool wrongColor)
+    {
+        lives = Math.Max(0, lives - 1);
+        misses++;
+        combo = 0;
+        missFeedbackTimer = 0.45f;
+        wrongHitTimer = wrongColor ? 0.55f : 0f;
+        shakeTimer = wrongColor ? 0.12f : 0.08f;
+        shakeStrength = wrongColor ? 0.05f : 0.035f;
+        audio.PlayMiss();
+
+        if (lives == 0)
+        {
+            gameState = GameState.GameOver;
+            audio.PlayGameOver();
+        }
+    }
+
+    string LivesDisplay()
+    {
+        return (lives >= 1 ? "♥ " : "- ") +
+            (lives >= 2 ? "♥ " : "- ") +
+            (lives >= 3 ? "♥" : "-");
+    }
+
+    void DrawStartSabers()
+    {
+        Raylib.DrawRectangle(405, 390, 18, 115, Color.Blue);
+        Raylib.DrawRectangle(857, 390, 18, 115, Color.Red);
+        Raylib.DrawRectangle(400, 385, 28, 125, new Color((byte)30, (byte)120, (byte)255, (byte)90));
+        Raylib.DrawRectangle(852, 385, 28, 125, new Color((byte)255, (byte)30, (byte)30, (byte)90));
+        Raylib.DrawText("BLUE", 390, 525, 22, Color.Blue);
+        Raylib.DrawText("RED", 850, 525, 22, Color.Red);
     }
 
     void UpdateSwing(Vector2 mouseDelta, float deltaTime, ref Vector3 direction, ref float speed)
@@ -324,13 +443,13 @@ Vector2 saber2Position = new Vector2(880, 360);
         int formation = formationNumber++;
         float z = -20f;
 
-        if (elapsedTime < 10f)
+        if (elapsedTime < 20f)
         {
             AddTarget(RandomLanePosition(), random.Next(2) == 0, z);
             return;
         }
 
-        if (elapsedTime < 24f)
+        if (elapsedTime < 45f)
         {
             switch (formation % 3)
             {
@@ -391,7 +510,9 @@ Vector2 saber2Position = new Vector2(880, 360);
         {
             Position = new Vector3(position.X, position.Y, z),
             IsBlue = isBlue,
-            Rotation = random.NextSingle() * 360f
+            Rotation = random.NextSingle() * 360f,
+            WrongHitCooldown = 0f,
+            WrongHitActive = false
         });
     }
 
@@ -571,6 +692,8 @@ Vector2 saber2Position = new Vector2(880, 360);
         public Vector3 Position;
         public bool IsBlue;
         public float Rotation;
+        public float WrongHitCooldown;
+        public bool WrongHitActive;
     }
 
     public class TrailPoint
@@ -615,7 +738,9 @@ Vector2 saber2Position = new Vector2(880, 360);
 
     public enum GameState
     {
-        Start,
+        AssigningBlue,
+        AssigningRed,
+        Ready,
         Playing,
         GameOver
     }
