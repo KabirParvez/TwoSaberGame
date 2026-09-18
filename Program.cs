@@ -43,6 +43,8 @@ Vector2 saber2TargetPosition = saber2Position;
     List<HitFlash> hitFlashes = new List<HitFlash>();
     List<SliceMark> sliceMarks = new List<SliceMark>();
     List<PatternType> recentPatterns = new List<PatternType>();
+    List<Vector3> blueDirectionHistory = new List<Vector3>();
+    List<Vector3> redDirectionHistory = new List<Vector3>();
     Random random = new Random();
     
     float spawnTimer = 0f;
@@ -64,6 +66,8 @@ Vector2 saber2TargetPosition = saber2Position;
     float redSwingSpeed = 0f;
     float blueSaberAngle = MathF.PI / 2f;
     float redSaberAngle = MathF.PI / 2f;
+    float blueAngularVelocity = 0f;
+    float redAngularVelocity = 0f;
     int blueMouseIndex = -1;
     int redMouseIndex = -1;
     int lives = 3;
@@ -150,10 +154,10 @@ Vector2 saber2TargetPosition = saber2Position;
         Vector3 saber1 = new Vector3(saber1X, saber1Y + 1f, 5.5f);
         Vector3 saber2 = new Vector3(saber2X, saber2Y + 1f, 5.5f);
 
-        UpdateSwing(mouse1, deltaTime, ref blueSwingDirection, ref blueSwingSpeed, ref blueSaberAngle);
-        UpdateSwing(mouse2, deltaTime, ref redSwingDirection, ref redSwingSpeed, ref redSaberAngle);
-        TrackTrail(blueTrail, saber1, blueSwingSpeed, deltaTime);
-        TrackTrail(redTrail, saber2, redSwingSpeed, deltaTime);
+        UpdateSwing(mouse1, deltaTime, blueDirectionHistory, ref blueSwingDirection, ref blueSwingSpeed, ref blueSaberAngle, ref blueAngularVelocity);
+        UpdateSwing(mouse2, deltaTime, redDirectionHistory, ref redSwingDirection, ref redSwingSpeed, ref redSaberAngle, ref redAngularVelocity);
+        TrackTrail(blueTrail, GetBladeEnd(saber1, blueSaberAngle), blueSwingSpeed, deltaTime);
+        TrackTrail(redTrail, GetBladeEnd(saber2, redSaberAngle), redSwingSpeed, deltaTime);
         audio.UpdateSabers(gameState == GameState.Playing, blueSwingSpeed, redSwingSpeed, blueSwingDirection, redSwingDirection, deltaTime);
         
         if (gameState == GameState.Playing)
@@ -378,6 +382,8 @@ Vector2 saber2TargetPosition = saber2Position;
         sliceMarks.Clear();
         blueTrail.Clear();
         redTrail.Clear();
+        blueDirectionHistory.Clear();
+        redDirectionHistory.Clear();
         recentPatterns.Clear();
         blueMouseIndex = -1;
         redMouseIndex = -1;
@@ -389,6 +395,8 @@ Vector2 saber2TargetPosition = saber2Position;
         redSaberVelocity = Vector2.Zero;
         blueSaberAngle = MathF.PI / 2f;
         redSaberAngle = MathF.PI / 2f;
+        blueAngularVelocity = 0f;
+        redAngularVelocity = 0f;
         spawnTimer = 0f;
         elapsedTime = 0f;
         formationNumber = 0;
@@ -483,32 +491,56 @@ Vector2 saber2TargetPosition = saber2Position;
         Raylib.DrawText("RED", 850, 525, 22, Color.Red);
     }
 
-    void UpdateSwing(Vector2 mouseDelta, float deltaTime, ref Vector3 direction, ref float speed, ref float angle)
+    void UpdateSwing(Vector2 mouseDelta, float deltaTime, List<Vector3> directionHistory, ref Vector3 direction, ref float speed, ref float angle, ref float angularVelocity)
     {
         float distance = mouseDelta.Length();
-        if (distance > 0.01f && deltaTime > 0f)
+        if (distance > 0.5f && deltaTime > 0f)
         {
             Vector3 movement = new Vector3(mouseDelta.X, -mouseDelta.Y, 0f);
             Vector3 movementDirection = Vector3.Normalize(movement);
-            direction = Vector3.Normalize(Vector3.Lerp(direction, movementDirection, 0.45f));
+            directionHistory.Add(movementDirection);
+            while (directionHistory.Count > 6)
+            {
+                directionHistory.RemoveAt(0);
+            }
+
+            Vector3 averagedDirection = Vector3.Zero;
+            foreach (Vector3 historyDirection in directionHistory)
+            {
+                averagedDirection += historyDirection;
+            }
+
+            if (averagedDirection.LengthSquared() > 0.001f)
+            {
+                averagedDirection = Vector3.Normalize(averagedDirection);
+                direction = Vector3.Normalize(Vector3.Lerp(direction, averagedDirection, 0.5f));
+            }
+
             float measuredSpeed = distance / deltaTime;
             float speedBlend = 1f - MathF.Exp(-12f * deltaTime);
             speed += (measuredSpeed - speed) * speedBlend;
-            float targetAngle = MathF.Atan2(movementDirection.Y, movementDirection.X);
-            angle = LerpAngle(angle, targetAngle, 1f - MathF.Exp(-16f * deltaTime));
+            float movementAngle = MathF.Atan2(direction.Y, direction.X);
+            float wristOffset = Math.Clamp(speed / 1500f, 0f, 1f) * 0.12f;
+            float targetAngle = movementAngle + wristOffset;
+            float angleDifference = MathF.Atan2(MathF.Sin(targetAngle - angle), MathF.Cos(targetAngle - angle));
+            angularVelocity += angleDifference * 34f * deltaTime;
+            angularVelocity = Math.Clamp(angularVelocity, -9f, 9f);
+            angularVelocity *= MathF.Exp(-11f * deltaTime);
+            angle += angularVelocity * deltaTime;
         }
         else
         {
             float stopBlend = 1f - MathF.Exp(-9f * deltaTime);
             speed += (0f - speed) * stopBlend;
-            angle = LerpAngle(angle, MathF.PI / 2f, 1f - MathF.Exp(-5f * deltaTime));
+            float angleDifference = MathF.Atan2(MathF.Sin(MathF.PI / 2f - angle), MathF.Cos(MathF.PI / 2f - angle));
+            angularVelocity += angleDifference * 18f * deltaTime;
+            angularVelocity *= MathF.Exp(-13f * deltaTime);
+            angle += angularVelocity * deltaTime;
+            if (speed < 3f)
+            {
+                directionHistory.Clear();
+            }
         }
-    }
-
-    float LerpAngle(float current, float target, float amount)
-    {
-        float difference = MathF.Atan2(MathF.Sin(target - current), MathF.Cos(target - current));
-        return current + difference * amount;
     }
 
     bool IsComboMilestone(int value)
@@ -664,7 +696,13 @@ Vector2 saber2TargetPosition = saber2Position;
         if (trail.Count == 0 || Vector3.DistanceSquared(trail[^1].Position, position) > 0.0001f)
         {
             float lifetime = 0.12f + Math.Clamp(speed / 1800f, 0f, 1f) * 0.28f;
-            trail.Add(new TrailPoint { Position = position, Lifetime = lifetime, MaxLifetime = lifetime });
+            trail.Add(new TrailPoint
+            {
+                Position = position,
+                Lifetime = lifetime,
+                MaxLifetime = lifetime,
+                Strength = Math.Clamp(speed / 1100f, 0f, 1f)
+            });
         }
 
         while (trail.Count > 24)
@@ -681,7 +719,7 @@ Vector2 saber2TargetPosition = saber2Position;
         {
             TrailPoint previous = trail[i - 1];
             TrailPoint current = trail[i];
-            byte alpha = (byte)Math.Clamp((int)(current.Lifetime / current.MaxLifetime * 170f), 0, 170);
+            byte alpha = (byte)Math.Clamp((int)(current.Lifetime / current.MaxLifetime * (120f + current.Strength * 80f)), 0, 200);
             Color trailColor = isBlue
                 ? new Color((byte)40, (byte)150, (byte)255, alpha)
                 : new Color((byte)255, (byte)60, (byte)60, alpha);
@@ -709,6 +747,8 @@ Vector2 saber2TargetPosition = saber2Position;
         Raylib.DrawCylinderEx(start, end, 0.17f + intensity * 0.05f, 0.17f + intensity * 0.05f, 10, outerColor);
         Raylib.DrawCylinderEx(start, end, 0.095f + intensity * 0.02f, 0.095f + intensity * 0.02f, 10, color);
         Raylib.DrawCylinderEx(start, end, 0.035f, 0.035f, 8, Color.White);
+        Raylib.DrawSphere(position, 0.13f, Color.DarkGray);
+        Raylib.DrawSphere(position, 0.075f, Color.Black);
     }
 
     void DrawTarget(GameObject obj)
@@ -840,6 +880,7 @@ Vector2 saber2TargetPosition = saber2Position;
         public Vector3 Position;
         public float Lifetime;
         public float MaxLifetime;
+        public float Strength;
     }
 
     public class HitFlash
