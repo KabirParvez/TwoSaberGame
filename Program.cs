@@ -32,6 +32,8 @@ Camera3D camera = new Camera3D
 
 Vector2 saber1Position = new Vector2(400, 360);
 Vector2 saber2Position = new Vector2(880, 360);
+Vector2 saber1TargetPosition = saber1Position;
+Vector2 saber2TargetPosition = saber2Position;
 
     List<GameObject> objects = new List<GameObject>();
     List<SlicedPiece> slicedPieces = new List<SlicedPiece>();
@@ -59,6 +61,8 @@ Vector2 saber2Position = new Vector2(880, 360);
     Vector3 redSwingDirection = Vector3.UnitX;
     float blueSwingSpeed = 0f;
     float redSwingSpeed = 0f;
+    float blueSaberAngle = MathF.PI / 2f;
+    float redSaberAngle = MathF.PI / 2f;
     int blueMouseIndex = -1;
     int redMouseIndex = -1;
     int lives = 3;
@@ -124,13 +128,17 @@ Vector2 saber2Position = new Vector2(880, 360);
         Vector2 mouse1 = blueMouseIndex == 0 ? rawMouse0 : rawMouse1;
         Vector2 mouse2 = redMouseIndex == 0 ? rawMouse0 : rawMouse1;
         
-        saber1Position += mouse1;
-        saber2Position += mouse2;
+        saber1TargetPosition += mouse1;
+        saber2TargetPosition += mouse2;
         
-        saber1Position.X = Math.Clamp(saber1Position.X, 50, 1230);
-        saber1Position.Y = Math.Clamp(saber1Position.Y, 50, 670);
-        saber2Position.X = Math.Clamp(saber2Position.X, 50, 1230);
-        saber2Position.Y = Math.Clamp(saber2Position.Y, 50, 670);
+        saber1TargetPosition.X = Math.Clamp(saber1TargetPosition.X, 50, 1230);
+        saber1TargetPosition.Y = Math.Clamp(saber1TargetPosition.Y, 50, 670);
+        saber2TargetPosition.X = Math.Clamp(saber2TargetPosition.X, 50, 1230);
+        saber2TargetPosition.Y = Math.Clamp(saber2TargetPosition.Y, 50, 670);
+
+        float positionBlend = 1f - MathF.Exp(-18f * deltaTime);
+        saber1Position = Vector2.Lerp(saber1Position, saber1TargetPosition, positionBlend);
+        saber2Position = Vector2.Lerp(saber2Position, saber2TargetPosition, positionBlend);
         
         float saber1X = (saber1Position.X - 640) / 200f;
         float saber1Y = -(saber1Position.Y - 360) / 200f;
@@ -140,10 +148,11 @@ Vector2 saber2Position = new Vector2(880, 360);
         Vector3 saber1 = new Vector3(saber1X, saber1Y + 1f, 5.5f);
         Vector3 saber2 = new Vector3(saber2X, saber2Y + 1f, 5.5f);
 
-        UpdateSwing(mouse1, deltaTime, ref blueSwingDirection, ref blueSwingSpeed);
-        UpdateSwing(mouse2, deltaTime, ref redSwingDirection, ref redSwingSpeed);
-        TrackTrail(blueTrail, saber1, deltaTime);
-        TrackTrail(redTrail, saber2, deltaTime);
+        UpdateSwing(mouse1, deltaTime, ref blueSwingDirection, ref blueSwingSpeed, ref blueSaberAngle);
+        UpdateSwing(mouse2, deltaTime, ref redSwingDirection, ref redSwingSpeed, ref redSaberAngle);
+        TrackTrail(blueTrail, saber1, blueSwingSpeed, deltaTime);
+        TrackTrail(redTrail, saber2, redSwingSpeed, deltaTime);
+        audio.UpdateSabers(gameState == GameState.Playing, blueSwingSpeed, redSwingSpeed, blueSwingDirection, redSwingDirection, deltaTime);
         
         if (gameState == GameState.Playing)
         {
@@ -204,7 +213,7 @@ Vector2 saber2Position = new Vector2(880, 360);
                     });
                     shakeTimer = 0.1f;
                     shakeStrength = 0.06f + slicePower * 0.06f;
-                    audio.PlayHit(obj.IsBlue);
+                    audio.PlayHit(obj.IsBlue, slicePower);
                     if (IsComboMilestone(combo))
                     {
                         comboMessage = $"{combo} COMBO!";
@@ -252,8 +261,8 @@ Vector2 saber2Position = new Vector2(880, 360);
         Raylib.DrawPlane(new Vector3(0, 0, 0), new Vector2(30, 30), Color.DarkGray);
         DrawTrail(blueTrail, true);
         DrawTrail(redTrail, false);
-        DrawSaber(saber1, Color.Blue);
-        DrawSaber(saber2, Color.Red);
+        DrawSaber(saber1, Color.Blue, blueSaberAngle, blueSwingSpeed);
+        DrawSaber(saber2, Color.Red, redSaberAngle, redSwingSpeed);
         
         foreach (GameObject obj in objects)
         {
@@ -368,6 +377,12 @@ Vector2 saber2Position = new Vector2(880, 360);
         redTrail.Clear();
         blueMouseIndex = -1;
         redMouseIndex = -1;
+        saber1Position = new Vector2(400, 360);
+        saber2Position = new Vector2(880, 360);
+        saber1TargetPosition = saber1Position;
+        saber2TargetPosition = saber2Position;
+        blueSaberAngle = MathF.PI / 2f;
+        redSaberAngle = MathF.PI / 2f;
         spawnTimer = 0f;
         elapsedTime = 0f;
         formationNumber = 0;
@@ -392,7 +407,14 @@ Vector2 saber2Position = new Vector2(880, 360);
         wrongHitTimer = wrongColor ? 0.55f : 0f;
         shakeTimer = wrongColor ? 0.12f : 0.08f;
         shakeStrength = wrongColor ? 0.05f : 0.035f;
-        audio.PlayMiss();
+        if (wrongColor)
+        {
+            audio.PlayWrongHit();
+        }
+        else
+        {
+            audio.PlayMiss();
+        }
 
         if (lives == 0)
         {
@@ -418,19 +440,32 @@ Vector2 saber2Position = new Vector2(880, 360);
         Raylib.DrawText("RED", 850, 525, 22, Color.Red);
     }
 
-    void UpdateSwing(Vector2 mouseDelta, float deltaTime, ref Vector3 direction, ref float speed)
+    void UpdateSwing(Vector2 mouseDelta, float deltaTime, ref Vector3 direction, ref float speed, ref float angle)
     {
         float distance = mouseDelta.Length();
         if (distance > 0.01f && deltaTime > 0f)
         {
             Vector3 movement = new Vector3(mouseDelta.X, -mouseDelta.Y, 0f);
-            direction = Vector3.Normalize(movement);
-            speed = distance / deltaTime;
+            Vector3 movementDirection = Vector3.Normalize(movement);
+            direction = Vector3.Normalize(Vector3.Lerp(direction, movementDirection, 0.45f));
+            float measuredSpeed = distance / deltaTime;
+            float speedBlend = 1f - MathF.Exp(-12f * deltaTime);
+            speed += (measuredSpeed - speed) * speedBlend;
+            float targetAngle = MathF.Atan2(movementDirection.Y, movementDirection.X);
+            angle = LerpAngle(angle, targetAngle, 1f - MathF.Exp(-16f * deltaTime));
         }
         else
         {
-            speed = Math.Max(0f, speed - 1800f * deltaTime);
+            float stopBlend = 1f - MathF.Exp(-9f * deltaTime);
+            speed += (0f - speed) * stopBlend;
+            angle = LerpAngle(angle, MathF.PI / 2f, 1f - MathF.Exp(-5f * deltaTime));
         }
+    }
+
+    float LerpAngle(float current, float target, float amount)
+    {
+        float difference = MathF.Atan2(MathF.Sin(target - current), MathF.Cos(target - current));
+        return current + difference * amount;
     }
 
     bool IsComboMilestone(int value)
@@ -516,7 +551,7 @@ Vector2 saber2Position = new Vector2(880, 360);
         });
     }
 
-    void TrackTrail(List<TrailPoint> trail, Vector3 position, float deltaTime)
+    void TrackTrail(List<TrailPoint> trail, Vector3 position, float speed, float deltaTime)
     {
         for (int i = trail.Count - 1; i >= 0; i--)
         {
@@ -529,10 +564,11 @@ Vector2 saber2Position = new Vector2(880, 360);
 
         if (trail.Count == 0 || Vector3.DistanceSquared(trail[^1].Position, position) > 0.0001f)
         {
-            trail.Add(new TrailPoint { Position = position, Lifetime = 0.22f });
+            float lifetime = 0.12f + Math.Clamp(speed / 1800f, 0f, 1f) * 0.28f;
+            trail.Add(new TrailPoint { Position = position, Lifetime = lifetime, MaxLifetime = lifetime });
         }
 
-        while (trail.Count > 12)
+        while (trail.Count > 24)
         {
             trail.RemoveAt(0);
         }
@@ -546,7 +582,7 @@ Vector2 saber2Position = new Vector2(880, 360);
         {
             TrailPoint previous = trail[i - 1];
             TrailPoint current = trail[i];
-            byte alpha = (byte)Math.Clamp((int)(current.Lifetime / 0.22f * 150f), 0, 150);
+            byte alpha = (byte)Math.Clamp((int)(current.Lifetime / current.MaxLifetime * 170f), 0, 170);
             Color trailColor = isBlue
                 ? new Color((byte)40, (byte)150, (byte)255, alpha)
                 : new Color((byte)255, (byte)60, (byte)60, alpha);
@@ -561,15 +597,19 @@ Vector2 saber2Position = new Vector2(880, 360);
         }
     }
 
-    void DrawSaber(Vector3 position, Color color)
+    void DrawSaber(Vector3 position, Color color, float angle, float speed)
     {
+        float intensity = Math.Clamp(speed / 1100f, 0f, 1f);
+        Vector3 direction = new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
+        Vector3 start = position - direction * 1.35f;
+        Vector3 end = position + direction * 1.35f;
         Color outerColor = color == Color.Blue
-            ? new Color((byte)30, (byte)120, (byte)255, (byte)90)
-            : new Color((byte)255, (byte)30, (byte)30, (byte)90);
+            ? new Color((byte)30, (byte)(120 + intensity * 80), (byte)255, (byte)(80 + intensity * 60))
+            : new Color((byte)255, (byte)(30 + intensity * 80), (byte)(30 + intensity * 40), (byte)(80 + intensity * 60));
 
-        Raylib.DrawCube(position, 0.34f, 2.9f, 0.34f, outerColor);
-        Raylib.DrawCube(position, 0.2f, 2.7f, 0.2f, color);
-        Raylib.DrawCube(position, 0.08f, 2.55f, 0.08f, Color.White);
+        Raylib.DrawCylinderEx(start, end, 0.17f + intensity * 0.05f, 0.17f + intensity * 0.05f, 10, outerColor);
+        Raylib.DrawCylinderEx(start, end, 0.095f + intensity * 0.02f, 0.095f + intensity * 0.02f, 10, color);
+        Raylib.DrawCylinderEx(start, end, 0.035f, 0.035f, 8, Color.White);
     }
 
     void DrawTarget(GameObject obj)
@@ -700,6 +740,7 @@ Vector2 saber2Position = new Vector2(880, 360);
     {
         public Vector3 Position;
         public float Lifetime;
+        public float MaxLifetime;
     }
 
     public class HitFlash
@@ -754,8 +795,15 @@ Vector2 saber2Position = new Vector2(880, 360);
         private Sound _combo;
         private Sound _gameOver;
         private Sound _start;
+        private Sound _wrongHit;
+        private Sound _blueHum;
+        private Sound _redHum;
+        private Sound _blueWhoosh;
+        private Sound _redWhoosh;
         private Music _music;
         private bool _musicLoaded;
+        private float _blueWhooshCooldown;
+        private float _redWhooshCooldown;
 
         public ProceduralAudio(bool enabled)
         {
@@ -771,6 +819,11 @@ Vector2 saber2Position = new Vector2(880, 360);
             _combo = CreateTone(900f, 0.24f, 0.2f, 260f);
             _gameOver = CreateTone(180f, 0.55f, 0.25f, -80f);
             _start = CreateTone(440f, 0.3f, 0.2f, 180f);
+            _wrongHit = CreateTone(85f, 0.2f, 0.28f, -35f);
+            _blueHum = CreateTone(115f, 1.2f, 0.12f, 4f);
+            _redHum = CreateTone(128f, 1.2f, 0.12f, 4f);
+            _blueWhoosh = CreateTone(260f, 0.18f, 0.2f, 420f);
+            _redWhoosh = CreateTone(300f, 0.18f, 0.2f, 480f);
 
             string musicPath = Path.Combine(Directory.GetCurrentDirectory(), "assets", "music.ogg");
             if (!File.Exists(musicPath))
@@ -792,16 +845,43 @@ Vector2 saber2Position = new Vector2(880, 360);
 
         public void PlayStart() => Play(_start);
 
-        public void PlayHit(bool isBlue)
+        public void PlayHit(bool isBlue, float intensity = 0f)
         {
-            Play(isBlue ? _blueHit : _redHit);
+            Sound sound = isBlue ? _blueHit : _redHit;
+            SetSoundProfile(sound, 0.75f + intensity * 0.25f, 0.95f + intensity * 0.15f);
+            Play(sound);
         }
+
+        public void PlayWrongHit() => Play(_wrongHit);
 
         public void PlayMiss() => Play(_miss);
 
         public void PlayCombo() => Play(_combo);
 
         public void PlayGameOver() => Play(_gameOver);
+
+        public void UpdateSabers(bool active, float blueSpeed, float redSpeed, Vector3 blueDirection, Vector3 redDirection, float deltaTime)
+        {
+            if (!_enabled)
+            {
+                return;
+            }
+
+            _blueWhooshCooldown = Math.Max(0f, _blueWhooshCooldown - deltaTime);
+            _redWhooshCooldown = Math.Max(0f, _redWhooshCooldown - deltaTime);
+
+            if (!active)
+            {
+                StopHum(_blueHum);
+                StopHum(_redHum);
+                return;
+            }
+
+            UpdateHum(_blueHum, blueSpeed);
+            UpdateHum(_redHum, redSpeed);
+            TryWhoosh(_blueWhoosh, blueSpeed, blueDirection, ref _blueWhooshCooldown);
+            TryWhoosh(_redWhoosh, redSpeed, redDirection, ref _redWhooshCooldown);
+        }
 
         public void UpdateMusic(float elapsedTime)
         {
@@ -828,6 +908,11 @@ Vector2 saber2Position = new Vector2(880, 360);
             Unload(_combo);
             Unload(_gameOver);
             Unload(_start);
+            Unload(_wrongHit);
+            Unload(_blueHum);
+            Unload(_redHum);
+            Unload(_blueWhoosh);
+            Unload(_redWhoosh);
 
             if (_musicLoaded)
             {
@@ -849,6 +934,53 @@ Vector2 saber2Position = new Vector2(880, 360);
             {
                 Raylib.UnloadSound(sound);
             }
+        }
+
+        private static void SetSoundProfile(Sound sound, float volume, float pitch)
+        {
+            if (Raylib.IsSoundValid(sound))
+            {
+                Raylib.SetSoundVolume(sound, Math.Clamp(volume, 0.05f, 1f));
+                Raylib.SetSoundPitch(sound, Math.Clamp(pitch, 0.5f, 2f));
+            }
+        }
+
+        private static void StopHum(Sound sound)
+        {
+            if (Raylib.IsSoundValid(sound) && Raylib.IsSoundPlaying(sound))
+            {
+                Raylib.StopSound(sound);
+            }
+        }
+
+        private static void UpdateHum(Sound sound, float speed)
+        {
+            if (!Raylib.IsSoundValid(sound))
+            {
+                return;
+            }
+
+            float movement = Math.Clamp(speed / 1000f, 0f, 1f);
+            Raylib.SetSoundVolume(sound, 0.035f + movement * 0.055f);
+            Raylib.SetSoundPitch(sound, 0.96f + movement * 0.12f);
+            if (!Raylib.IsSoundPlaying(sound))
+            {
+                Raylib.PlaySound(sound);
+            }
+        }
+
+        private static void TryWhoosh(Sound sound, float speed, Vector3 direction, ref float cooldown)
+        {
+            if (!Raylib.IsSoundValid(sound) || cooldown > 0f || speed < 180f)
+            {
+                return;
+            }
+
+            float intensity = Math.Clamp((speed - 180f) / 900f, 0f, 1f);
+            float diagonalBoost = 1f - Math.Abs(direction.X * direction.Y);
+            SetSoundProfile(sound, 0.08f + intensity * 0.3f, 0.85f + intensity * 0.35f + diagonalBoost * 0.08f);
+            Raylib.PlaySound(sound);
+            cooldown = 0.16f - intensity * 0.05f;
         }
 
         private static Sound CreateTone(float frequency, float duration, float volume, float frequencyChange)
